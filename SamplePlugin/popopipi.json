@@ -94,7 +94,7 @@
         ],
         "InternalName": "Soundy",
         "AssemblyVersion": "2.4.0.0",
-        "TestingAssemblyVersion": "1.4.4.0",
+        "TestingAssemblyVersion": "2.5.0.0",
         "RepoUrl": "https://github.com/lnjanos",
         "ApplicableVersion": "any",
         "DalamudApiLevel": 15,
@@ -105,7 +105,7 @@
         "LastUpdate": 1783196886,
         "DownloadLinkInstall": "https://github.com/lnjanos/yueImport/releases/download/release/soundy_2.4.0.0.zip",
         "DownloadLinkUpdate": "https://github.com/lnjanos/yueImport/releases/download/release/soundy_2.4.0.0.zip",
-        "DownloadLinkTesting": "https://github.com/lnjanos/yueImport/releases/download/release/soundy_1.4.4.0.zip",
+        "DownloadLinkTesting": "https://github.com/lnjanos/yueImport/releases/download/release/soundy_2.5.0.0.zip",
         "Changelog": "SoundyQ beta update: music-bot style queue modes, per-player request permissions, auto-approve support, improved pre-queue metadata/actions, clearer approved queue controls, duplicate location messages, and automatic self-redraw after Penumbra track switches.",
         "IconUrl": "https://raw.githubusercontent.com/lnjanos/yueImport/refs/heads/master/7onk2b.png"
     }
@@ -125,7 +125,7 @@
         ],
         "InternalName": "Dancy",
         "AssemblyVersion": "0.2.0.0",
-        "TestingAssemblyVersion": "0.0.0.1",
+        "TestingAssemblyVersion": "0.3.0.0",
         "RepoUrl": "https://github.com/lnjanos/Dancy",
         "ApplicableVersion": "any",
         "DalamudApiLevel": 15,
@@ -136,7 +136,7 @@
         "LastUpdate": 1733780713,
         "DownloadLinkInstall": "https://github.com/lnjanos/Dancy/releases/download/release/0.2.0.0.zip",
         "DownloadLinkUpdate": "https://github.com/lnjanos/Dancy/releases/download/release/0.2.0.0.zip",
-        "DownloadLinkTesting": "https://github.com/lnjanos/Dancy/releases/download/release/0.0.0.1.zip",
+        "DownloadLinkTesting": "https://github.com/lnjanos/Dancy/releases/download/release/0.3.0.0.zip",
         "IconUrl": "https://raw.githubusercontent.com/lnjanos/Dancy/refs/heads/master/dancy.png"
     }
 ]
