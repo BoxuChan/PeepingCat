@@ -98,7 +98,7 @@
         "RepoUrl": "https://github.com/lnjanos",
         "ApplicableVersion": "any",
         "DalamudApiLevel": 15,
-        "TestingDalamudApiLevel": 12,
+        "TestingDalamudApiLevel": 15,
         "IsHide": "False",
         "IsTestingExclusive": "False",
         "DownloadCount": 2314,
@@ -108,8 +108,7 @@
         "DownloadLinkTesting": "https://github.com/lnjanos/yueImport/releases/download/release/soundy_2.5.0.0.zip",
         "Changelog": "SoundyQ beta update: music-bot style queue modes, per-player request permissions, auto-approve support, improved pre-queue metadata/actions, clearer approved queue controls, duplicate location messages, and automatic self-redraw after Penumbra track switches.",
         "IconUrl": "https://raw.githubusercontent.com/lnjanos/yueImport/refs/heads/master/7onk2b.png"
-    }
-,
+    },
     {
         "Author": "kcuY",
         "Name": "Dancy",
@@ -129,7 +128,7 @@
         "RepoUrl": "https://github.com/lnjanos/Dancy",
         "ApplicableVersion": "any",
         "DalamudApiLevel": 15,
-        "TestingDalamudApiLevel": 12,
+        "TestingDalamudApiLevel": 15,
         "IsHide": "False",
         "IsTestingExclusive": "False",
         "DownloadCount": 1521,
