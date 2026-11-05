@@ -26,16 +26,16 @@ jobs:
           Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev\"
 
       - name: Restore dependencies
-        run: dotnet restore PeepingCat.csproj
+        run: dotnet restore PeepingCat/PeepingCat.csproj
 
       - name: Build
-        run: dotnet build PeepingCat.csproj --no-restore /p:Configuration=Release /p:DefineConstants=XL_NOAUTOUPDATE
+        run: dotnet build PeepingCat/PeepingCat.csproj --no-restore /p:Configuration=Release /p:DefineConstants=XL_NOAUTOUPDATE
 
       - name: Package
         shell: pwsh
         run: |
           # locate the Release output folder instead of hardcoding it
-          $dll = Get-ChildItem -Path bin -Recurse -Filter PeepingCat.dll |
+          $dll = Get-ChildItem -Path PeepingCat\bin -Recurse -Filter PeepingCat.dll |
                  Where-Object { $_.FullName -match 'Release' } |
                  Select-Object -First 1
           if (-not $dll) { throw "PeepingCat.dll not found in a Release output folder" }
