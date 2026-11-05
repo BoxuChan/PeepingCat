@@ -1,66 +1,83 @@
 name: Build and Release
 
 on:
-  push:
-    branches: [ main, master ]
-    tags: [ '*' ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    push:
+        branches: [ main, master ]
+        tags: [ '*' ]
+    pull_request:
+        branches: [ main, master ]
+    workflow_dispatch:
 
 permissions:
-  contents: write
+    contents: write
+
+env:
+    DALAMUD_HOME: ${{ github.workspace }}\dalamud
 
 jobs:
-  build:
-    runs-on: windows-latest
+    build:
+        runs-on: windows-latest
+        
+        steps:
+            - uses: actions/checkout@v4
 
-    steps:
-      - uses: actions/checkout@v4
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: '10.0.x'
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
+            - name: Download Dalamud
+              shell: pwsh
+              run: |
+                  Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
+                  Expand-Archive -Force latest.zip "$env:DALAMUD_HOME"
 
-      - name: Setup Dalamud
-        run: |
-          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
-          Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev\"
+            - name: Restore
+              run: dotnet restore PeepingCat/PeepingCat.csproj
 
-      - name: Restore dependencies
-        run: dotnet restore PeepingCat/PeepingCat.csproj
+            - name: Build
+              run: dotnet build PeepingCat/PeepingCat.csproj -c Release --no-restore
 
-      - name: Build
-        run: dotnet build PeepingCat/PeepingCat.csproj --no-restore /p:Configuration=Release /p:DefineConstants=XL_NOAUTOUPDATE
+            - name: Package
+              shell: pwsh
+              run: |
+                  $dll = Get-ChildItem -Path PeepingCat\bin -Recurse -Filter PeepingCat.dll |
+                         Where-Object { $_.FullName -match 'Release' } |
+                         Select-Object -First 1
+                  if (-not $dll) { throw "PeepingCat.dll not found in a Release output folder" }
+                  $out = $dll.DirectoryName
+                  
+                  $stage = Join-Path $PWD "stage"
+                  New-Item -ItemType Directory -Force -Path $stage | Out-Null
+                  
+                  # core files (manifest falls back to the source copy if not in the output)
+                  Copy-Item (Join-Path $out "PeepingCat.dll") $stage
+                  $pdb = Join-Path $out "PeepingCat.pdb"
+                  if (Test-Path $pdb) { Copy-Item $pdb $stage }
+                  $manifest = Join-Path $out "PeepingCat.json"
+                  if (-not (Test-Path $manifest)) { $manifest = "PeepingCat\PeepingCat.json" }
+                  Copy-Item $manifest $stage
+                  
+                  # assets always come from source so they are never missing
+                  Copy-Item "PeepingCat\assets" (Join-Path $stage "assets") -Recurse
+                  
+                  # icon in the location Dalamud reads from inside the zip
+                  New-Item -ItemType Directory -Force -Path (Join-Path $stage "images") | Out-Null
+                  Copy-Item "PeepingCat\assets\logo.png" (Join-Path $stage "images\icon.png")
+                  
+                  New-Item -ItemType Directory -Force -Path bin\Package | Out-Null
+                  Compress-Archive -Path "$stage\*" -DestinationPath bin\Package\PeepingCat.zip -Force
 
-      - name: Package
-        shell: pwsh
-        run: |
-          # locate the Release output folder instead of hardcoding it
-          $dll = Get-ChildItem -Path PeepingCat\bin -Recurse -Filter PeepingCat.dll |
-                 Where-Object { $_.FullName -match 'Release' } |
-                 Select-Object -First 1
-          if (-not $dll) { throw "PeepingCat.dll not found in a Release output folder" }
-          $out = $dll.DirectoryName
+            - name: Upload build artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: PeepingCat
+                  path: bin/Package/PeepingCat.zip
 
-          $files = @("PeepingCat.dll", "PeepingCat.json", "PeepingCat.pdb", "assets") |
-                   ForEach-Object { Join-Path $out $_ } |
-                   Where-Object { Test-Path $_ }
-
-          New-Item -ItemType Directory -Force -Path bin\Package | Out-Null
-          Compress-Archive -Path $files -DestinationPath bin\Package\PeepingCat.zip -Force
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PeepingCat
-          path: bin\Package\PeepingCat.zip
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: bin\Package\PeepingCat.zip
-          name: Release ${{ github.ref_name }}
-          generate_release_notes: true
+            - name: Create GitHub Release
+              if: startsWith(github.ref, 'refs/tags/')
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: bin/Package/PeepingCat.zip
+                  name: ${{ github.ref_name }}
+                  generate_release_notes: true

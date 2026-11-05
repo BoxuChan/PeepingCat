@@ -3,12 +3,6 @@
     "Name": "Peeping Cat",
     "Punchline": "The cat sees all!",
     "Description": "A different version of Peeping Tim who's just a different Version of Peeping Tom.",
-    "Tags": [
-        "Peeping Cat",
-        "kcuy",
-        "Boxu",
-        "BoxuChan"
-    ],
     "InternalName": "PeepingCat",
     "AssemblyVersion": "2.2.0.0",
     "TestingAssemblyVersion": "2.2.0.0",
@@ -16,13 +10,17 @@
     "RepoUrl": "https://github.com/BoxuChan/PeepingCat",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
-    "TestingDalamudApiLevel": 13,
+    "TestingDalamudApiLevel": 15,
     "IsHide": "False",
     "IsTestingExclusive": "False",
-    "DownloadCount": 1,
-    "LastUpdate": 1782929670,
-    "DownloadLinkInstall": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0.zip",
-    "DownloadLinkUpdate": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0.zip",
-    "DownloadLinkTesting": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0.zip",
-    "IconUrl": "https://raw.githubusercontent.com/BoxuChan/PeepingCat/assets/logo.png"
+    "DownloadLinkInstall": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0/PeepingCat.zip",
+    "DownloadLinkTesting": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0/PeepingCat.zip",
+    "DownloadLinkUpdate": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0/PeepingCat.zip",
+    "IconUrl": "https://raw.githubusercontent.com/BoxuChan/PeepingCat/master/PeepingCat/assets/logo.png",
+    "Tags": [
+        "Peeping Cat",
+        "kcuy",
+        "Boxu",
+        "BoxuChan"
+    ]
 }
