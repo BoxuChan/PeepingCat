@@ -22,9 +22,9 @@
         "IsTestingExclusive": "False",
         "DownloadCount": 1,
         "LastUpdate": 1782929670,
-        "DownloadLinkInstall": "https://github.com/BoxuChan/PeepingCat/releases/download/release/2.2.0.0.zip",
-        "DownloadLinkUpdate": "https://github.com/BoxuChan/PeepingCat/releases/download/release/2.2.0.0.zip",
-        "DownloadLinkTesting": "https://github.com/BoxuChan/PeepingCat/releases/download/release/2.2.0.0.zip",
-        "IconUrl": "https://raw.githubusercontent.com/BoxuChan/PeepingCat/refs/heads/master/PeepingCat/assets/logo.png"
+        "DownloadLinkInstall": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0.zip",
+        "DownloadLinkUpdate": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0.zip",
+        "DownloadLinkTesting": "https://github.com/BoxuChan/PeepingCat/releases/download/2.2.0.0.zip",
+        "IconUrl": "https://raw.githubusercontent.com/BoxuChan/PeepingCat/assets/logo.png"
     }
 ]
