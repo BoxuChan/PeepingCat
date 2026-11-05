@@ -1,83 +1,93 @@
 name: Build and Release
 
 on:
-    push:
-        branches: [ main, master ]
-        tags: [ '*' ]
-    pull_request:
-        branches: [ main, master ]
-    workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    tags: [ '*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 permissions:
-    contents: write
-
-env:
-    DALAMUD_HOME: ${{ github.workspace }}\dalamud
+  contents: write
 
 jobs:
-    build:
-        runs-on: windows-latest
-        
-        steps:
-            - uses: actions/checkout@v4
+  build:
+    runs-on: windows-latest
 
-            - name: Setup .NET
-              uses: actions/setup-dotnet@v4
-              with:
-                  dotnet-version: '10.0.x'
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Download Dalamud
-              shell: pwsh
-              run: |
-                  Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
-                  Expand-Archive -Force latest.zip "$env:DALAMUD_HOME"
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
 
-            - name: Restore
-              run: dotnet restore PeepingCat/PeepingCat.csproj
+      - name: Setup Dalamud
+        run: |
+          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
+          Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev\"
 
-            - name: Build
-              run: dotnet build PeepingCat/PeepingCat.csproj -c Release --no-restore
+      - name: Restore dependencies
+        run: dotnet restore PeepingCat/PeepingCat.csproj
 
-            - name: Package
-              shell: pwsh
-              run: |
-                  $dll = Get-ChildItem -Path PeepingCat\bin -Recurse -Filter PeepingCat.dll |
-                         Where-Object { $_.FullName -match 'Release' } |
-                         Select-Object -First 1
-                  if (-not $dll) { throw "PeepingCat.dll not found in a Release output folder" }
-                  $out = $dll.DirectoryName
-                  
-                  $stage = Join-Path $PWD "stage"
-                  New-Item -ItemType Directory -Force -Path $stage | Out-Null
-                  
-                  # core files (manifest falls back to the source copy if not in the output)
-                  Copy-Item (Join-Path $out "PeepingCat.dll") $stage
-                  $pdb = Join-Path $out "PeepingCat.pdb"
-                  if (Test-Path $pdb) { Copy-Item $pdb $stage }
-                  $manifest = Join-Path $out "PeepingCat.json"
-                  if (-not (Test-Path $manifest)) { $manifest = "PeepingCat\PeepingCat.json" }
-                  Copy-Item $manifest $stage
-                  
-                  # assets always come from source so they are never missing
-                  Copy-Item "PeepingCat\assets" (Join-Path $stage "assets") -Recurse
-                  
-                  # icon in the location Dalamud reads from inside the zip
-                  New-Item -ItemType Directory -Force -Path (Join-Path $stage "images") | Out-Null
-                  Copy-Item "PeepingCat\assets\logo.png" (Join-Path $stage "images\icon.png")
-                  
-                  New-Item -ItemType Directory -Force -Path bin\Package | Out-Null
-                  Compress-Archive -Path "$stage\*" -DestinationPath bin\Package\PeepingCat.zip -Force
+      - name: Build
+        run: dotnet build PeepingCat/PeepingCat.csproj --no-restore /p:Configuration=Release /p:DefineConstants=XL_NOAUTOUPDATE
 
-            - name: Upload build artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: PeepingCat
-                  path: bin/Package/PeepingCat.zip
+      - name: Package
+        shell: pwsh
+        run: |
+          $stage = Join-Path $PWD "stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
-            - name: Create GitHub Release
-              if: startsWith(github.ref, 'refs/tags/')
-              uses: softprops/action-gh-release@v2
-              with:
-                  files: bin/Package/PeepingCat.zip
-                  name: ${{ github.ref_name }}
-                  generate_release_notes: true
+          $zip = Get-ChildItem PeepingCat\bin -Recurse -Filter latest.zip |
+                 Where-Object { $_.FullName -match 'Release' } |
+                 Select-Object -First 1
+
+          if ($zip) {
+            Write-Host "Using packager output: $($zip.FullName)"
+            Expand-Archive -Force $zip.FullName $stage
+          } else {
+            Write-Host "latest.zip not found, copying the Release output folder"
+            $dll = Get-ChildItem PeepingCat\bin -Recurse -Filter PeepingCat.dll |
+                   Where-Object { $_.FullName -match 'Release' } |
+                   Select-Object -First 1
+            if (-not $dll) { throw "PeepingCat.dll not found in a Release output folder" }
+            Copy-Item "$($dll.DirectoryName)\*" $stage -Recurse -Force
+            if (-not (Test-Path "$stage\PeepingCat.json")) {
+              Copy-Item "PeepingCat\PeepingCat.json" $stage
+            }
+          }
+
+          # assets and icon
+          if (-not (Test-Path "$stage\assets\alert.wav")) {
+            New-Item -ItemType Directory -Force -Path "$stage\assets" | Out-Null
+            Copy-Item "PeepingCat\assets\alert.wav" "$stage\assets\" -Force
+          }
+          New-Item -ItemType Directory -Force -Path "$stage\images" | Out-Null
+          Copy-Item "PeepingCat\assets\logo.png" "$stage\images\icon.png" -Force
+
+          # print the contents so you can verify them in the Actions log
+          Get-ChildItem $stage -Recurse -File | ForEach-Object { $_.FullName.Substring($stage.Length + 1) }
+
+          # sanity check: fail the build if the dependencies are missing
+          foreach ($f in "PeepingCat.dll", "PeepingCat.json", "ECommons.dll", "NAudio.Core.dll") {
+            if (-not (Test-Path (Join-Path $stage $f))) { throw "$f is missing from the package" }
+          }
+
+          New-Item -ItemType Directory -Force -Path bin\Package | Out-Null
+          Compress-Archive -Path "$stage\*" -DestinationPath bin\Package\PeepingCat.zip -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PeepingCat
+          path: bin\Package\PeepingCat.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: bin\Package\PeepingCat.zip
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
