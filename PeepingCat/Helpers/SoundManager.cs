@@ -1,22 +1,8 @@
 using NAudio.Wave;
-using PeepingCat.Windows;
+
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
-using Dalamud.Game.ClientState.Objects.Types;
-using Dalamud.Game;
-using Dalamud.Game.ClientState;
-using Dalamud.Game.ClientState.Objects;
-using Dalamud.Game.ClientState.Objects.SubKinds;
-using Dalamud.Game.Command;
-using Dalamud.Interface.Windowing;
-using Dalamud.IoC;
-using Dalamud.Plugin;
-using Dalamud.Plugin.Services;
 
 namespace PeepingCat.Helpers {
     internal class SoundManager {

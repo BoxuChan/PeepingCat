@@ -20,8 +20,8 @@ public class Configuration : IPluginConfiguration {
     public string SoundFilePath { get; set; } = OriginalSoundFile;
     public bool OpenOnLogin { get; set; } = true;
     public bool ShowSettingsButton { get; set; } = true;
-    public bool AllowMovingMainWindow { get; set; }
-    public bool AllowResizingMainWindow { get; set; }
+    public bool AllowMovingMainWindow { get; set; } = true;
+    public bool AllowResizingMainWindow { get; set; } = true;
     public bool AllowClosingWithEscape { get; set; }
     public bool ShowInCombat { get; set; }
     public bool ShowInCutscenes { get; set; }
@@ -37,7 +37,7 @@ public class Configuration : IPluginConfiguration {
     public Vector4 unloadedColour { get; set; } = new Vector4(0.5f, 0.5f, 0.5f, 1f);
     public Vector4 loadedColour { get; set; } = new Vector4(1f, 1f, 1f, 1f);
 
-    public readonly string DevVersion = "2.2.0.0";
+    public readonly string DevVersion = "2.2.0.1";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 
