@@ -17,13 +17,11 @@ global using MoodlesStatusInfo = (
     bool Permanent
 );
 
-public enum StatusType
-{
+public enum StatusType {
     Positive, Negative, Special
 }
 
-public enum ChainTrigger
-{
+public enum ChainTrigger {
     Dispel = 0,
     HitMaxStacks = 1,
     TimerExpired = 2,
