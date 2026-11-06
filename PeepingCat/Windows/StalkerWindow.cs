@@ -58,7 +58,7 @@ namespace PeepingCat.Windows {
                     foreach (var viewer in stalkerViewers) {
                         ViewerRow.Draw(Plugin, viewer, allViewers);
                     }
-                } else {
+                } else if (Plugin.Configuration.ShowNoViewersText) {
                     ImGui.Text("No viewers yet.");
                 }
 

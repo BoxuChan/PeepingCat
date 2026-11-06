@@ -322,7 +322,7 @@ namespace PeepingCat {
 
             foreach (var obj in ObjectTable) {
                 if (obj is IPlayerCharacter character) {
-                    if (character.TargetObjectId == localPlayerId && character.GameObjectId != localPlayerId) {
+                    if (character.TargetObjectId == localPlayerId && (Configuration.DetectSelfTarget || character.GameObjectId != localPlayerId)) {
                         string charKey = GetPlayerKey(character);
                         currentlyLookingAtMe.Add(charKey);
 

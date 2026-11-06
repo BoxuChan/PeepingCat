@@ -132,6 +132,18 @@ namespace PeepingCat.Windows {
                         Configuration.AllowClosingWithEscape = allowEscape;
                         Configuration.Save();
                     }
+                    
+                    var showNoViewers = Configuration.ShowNoViewersText;
+                    if (ImGui.Checkbox("Show \"No viewers yet.\" Text", ref showNoViewers)) {
+                        Configuration.ShowNoViewersText = showNoViewers;
+                        Configuration.Save();
+                    }
+                    
+                    var detectSelf = Configuration.DetectSelfTarget;
+                    if (ImGui.Checkbox("Detect Self-Targeting", ref detectSelf)) {
+                        Configuration.DetectSelfTarget = detectSelf;
+                        Configuration.Save();
+                    }
 
                     ImGui.Spacing();
                     ImGui.TextColored(new Vector4(1.0f, 0.84f, 0.0f, 1.0f), "Visibility");
