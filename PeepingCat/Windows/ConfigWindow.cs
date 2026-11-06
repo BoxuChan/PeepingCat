@@ -134,7 +134,7 @@ namespace PeepingCat.Windows {
                     }
                     
                     var showNoViewers = Configuration.ShowNoViewersText;
-                    if (ImGui.Checkbox("Show \"No viewers yet.\" Text", ref showNoViewers)) {
+                    if (ImGui.Checkbox("Show Empty Viewers Text", ref showNoViewers)) {
                         Configuration.ShowNoViewersText = showNoViewers;
                         Configuration.Save();
                     }
