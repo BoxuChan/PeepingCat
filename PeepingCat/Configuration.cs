@@ -35,11 +35,12 @@ public class Configuration : IPluginConfiguration {
     public bool BuffInfoOption { get; set; } = true;
     public bool ShowNoViewersText { get; set; }
     public bool DetectSelfTarget { get; set; }
+    public bool Chat2MenuOption { get; set; } = false;
     public Vector4 targetingColour { get; set; } = new Vector4(0.0431f, 0.9569f, 0.1804f, 1.0000f);
     public Vector4 unloadedColour { get; set; } = new Vector4(0.5f, 0.5f, 0.5f, 1f);
     public Vector4 loadedColour { get; set; } = new Vector4(1f, 1f, 1f, 1f);
 
-    public readonly string DevVersion = "2.2.1.1";
+    public readonly string DevVersion = "2.3.0.0";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 

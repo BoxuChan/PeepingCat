@@ -39,9 +39,35 @@ namespace PeepingCat.Windows {
             "Open Context Menu", "View Search Info", "View Adventurer Plate", "Examine"
         };
 
-        private static bool IconMenuItem(FontAwesomeIcon icon, string label) {
+        public static void OpenGameContextMenu(Plugin.ViewerInfo viewer) {
+            IGameObject? character = Svc.Objects.SearchById(viewer.lastKnownGameObjectId);
+            if (character == null) {
+                return;
+            }
+
+            unsafe {
+                Svc.Framework.RunOnTick(() => {
+                    AgentHUD.Instance()->OpenContextMenuFromTarget(character.Struct());
+                });
+            }
+        }
+        
+        public static void ExamineViewer(Plugin.ViewerInfo viewer) {
+            IGameObject? character = Svc.Objects.SearchById(viewer.lastKnownGameObjectId);
+            if (character == null) {
+                return;
+            }
+
+            unsafe {
+                Svc.Framework.RunOnTick(() => {
+                    AgentInspect.Instance()->ExamineCharacter(character.EntityId);
+                });
+            }
+        }
+        
+        public static bool IconMenuItem(FontAwesomeIcon icon, string label) {
             float scale = ImGuiHelpers.GlobalScale;
-            var style = ImGui.GetStyle();
+            ImGui.GetStyle();
 
             float leftPad = 6f * scale;
             float iconColumn = 20f * scale;
@@ -113,14 +139,7 @@ namespace PeepingCat.Windows {
                 }
 
                 if (showContext && IconMenuItem(FontAwesomeIcon.Bars, "Open Context Menu")) {
-                    IGameObject? pc = Svc.Objects.SearchById(viewer.lastKnownGameObjectId);
-                    if (pc != null) {
-                        unsafe {
-                            Svc.Framework.RunOnTick(() => {
-                                AgentHUD.Instance()->OpenContextMenuFromTarget(pc.Struct());
-                            });
-                        }
-                    }
+                    OpenGameContextMenu(viewer);
                 }
 
                 if (showSearchInfo && IconMenuItem(FontAwesomeIcon.InfoCircle, "View Search Info")) {
@@ -147,14 +166,7 @@ namespace PeepingCat.Windows {
                 }
 
                 if (showExamine && IconMenuItem(FontAwesomeIcon.Search, "Examine")) {
-                    IGameObject? character = Svc.Objects.SearchById(viewer.lastKnownGameObjectId);
-                    if (character != null) {
-                        unsafe {
-                            Svc.Framework.RunOnTick(() => {
-                                AgentInspect.Instance()->ExamineCharacter(character.EntityId);
-                            });
-                        }
-                    }
+                    ExamineViewer(viewer);
                 }
 
                 ImGui.EndPopup();
@@ -163,6 +175,12 @@ namespace PeepingCat.Windows {
             DrawBuffModal(Plugin);
         }
 
+        public static void ShowBuffs(string owner, List<MoodlesStatusInfo> buffs) {
+            BuffOwner = owner;
+            Buffs = buffs;
+            OpenBuffModal = true;
+        }
+        
         private static bool DrawBuffMenuItem(Plugin Plugin, Plugin.ViewerInfo viewer) {
             if (!Plugin.Configuration.BuffInfoOption) {
                 return false;
@@ -198,7 +216,7 @@ namespace PeepingCat.Windows {
             return true;
         }
 
-        private static void DrawBuffModal(Plugin Plugin) {
+        public static void DrawBuffModal(Plugin Plugin) {
             int frame = ImGui.GetFrameCount();
             if (LastBuffModalDrawFrame == frame) {
                 return;

@@ -12,6 +12,7 @@ using System.Numerics;
 namespace PeepingCat.Windows {
     public class ConfigWindow : Window {
         private Configuration Configuration;
+        private Plugin plugin;
         private FileDialogManager FileDialogManager;
         private SoundManager SoundManager;
 
@@ -23,6 +24,7 @@ namespace PeepingCat.Windows {
             SoundManager = new SoundManager(plugin);
 
             Configuration = plugin.Configuration;
+            this.plugin = plugin;
         }
 
         public override void Draw() {
@@ -143,6 +145,16 @@ namespace PeepingCat.Windows {
                     if (ImGui.Checkbox("Detect Self-Targeting", ref detectSelf)) {
                         Configuration.DetectSelfTarget = detectSelf;
                         Configuration.Save();
+                    }
+                    
+                    var chat2Menu = Configuration.Chat2MenuOption;
+                    if (ImGui.Checkbox("Chat 2 Integration", ref chat2Menu)) {
+                        Configuration.Chat2MenuOption = chat2Menu;
+                        Configuration.Save();
+                        plugin.SetChat2Integration(chat2Menu);
+                    }
+                    if (ImGui.IsItemHovered()) {
+                        ImGui.SetTooltip("Adds View Search Info and View Adventurer Plate to Chat 2's right-click menu. Does nothing if Chat 2 isn't installed.");
                     }
 
                     ImGui.Spacing();

@@ -66,16 +66,21 @@ namespace PeepingCat {
         private readonly Dictionary<string, long> lastSoundNotificationTicks = new();
 
         private readonly ICallGateSubscriber<IPlayerCharacter, List<MoodlesStatusInfo>> GetStatusManagerInfoByPlayerV2;
+        
+        private Chat2Integration chat2Integration = null!;
+        private NearbyWindow NearbyWindow = null!;
 
         public Plugin() {
             Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
             MainWindow = new MainWindow(this);
             ConfigWindow = new ConfigWindow(this);
-            SoundManager = new Helpers.SoundManager(this);
-
+            SoundManager = new Helpers.SoundManager(this); 
+            NearbyWindow = new NearbyWindow(this);
+            
             WindowSystem.AddWindow(MainWindow);
             WindowSystem.AddWindow(ConfigWindow);
+            WindowSystem.AddWindow(NearbyWindow);
 
             CommandManager.AddHandler(CommandName1, new CommandInfo(OnCommand) {
                 HelpMessage = "Opens P-Cat Window."
@@ -108,6 +113,11 @@ namespace PeepingCat {
             Framework.Update += OnUpdate;
             Framework.Update += OnSearchInfoUpdate;
             GetStatusManagerInfoByPlayerV2 = Svc.PluginInterface.GetIpcSubscriber<IPlayerCharacter, List<MoodlesStatusInfo>>("Moodles.GetStatusManagerInfoByPlayerV2");
+            
+            chat2Integration = new Chat2Integration(this, PluginInterface);
+            if (Configuration.Chat2MenuOption) {
+                chat2Integration.Enable();
+            }
         }
 
         private bool IsInDutyInstance() {
@@ -168,6 +178,8 @@ namespace PeepingCat {
             Framework.Update -= OnUpdate;
             Framework.Update -= OnSearchInfoUpdate;
             
+            chat2Integration.Dispose();
+            
             unsafe {
                 if (searchInfoData != null) {
                     NativeMemory.Free(searchInfoData);
@@ -179,6 +191,11 @@ namespace PeepingCat {
         }
 
         private void OnCommand(string command, string args) {
+            if (args.Trim().Equals("nearby", StringComparison.OrdinalIgnoreCase)) {
+                NearbyWindow.IsOpen = !NearbyWindow.IsOpen;
+                return;
+            }
+
             MainWindow.IsOpen = !MainWindow.IsOpen;
         }
 
@@ -203,7 +220,11 @@ namespace PeepingCat {
             }
         }
 
-        private void DrawUI() => WindowSystem.Draw();
+        private void DrawUI() {
+            WindowSystem.Draw();
+            Popup.DrawBuffModal(this);
+        }
+        
         public void DrawConfig() => OnConfig("/pcatconfig", "");
         private void DrawMain() => OnCommand("/pcat", "");
 
@@ -211,6 +232,14 @@ namespace PeepingCat {
             return GetStatusManagerInfoByPlayerV2.HasFunction;
         }
 
+        public void SetChat2Integration(bool enabled) {
+            if (enabled) {
+                chat2Integration.Enable();
+            } else {
+                chat2Integration.Disable();
+            }
+        }
+        
         public List<MoodlesStatusInfo> TryGetMoodlesStatus(IPlayerCharacter player) {
             if (!GetStatusManagerInfoByPlayerV2.HasFunction) {
                 return new List<MoodlesStatusInfo>();

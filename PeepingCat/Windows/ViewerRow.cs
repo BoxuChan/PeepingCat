@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace PeepingCat.Windows {
     public static class ViewerRow {
-        public static void Draw(Plugin plugin, Plugin.ViewerInfo viewer, HashSet<Plugin.ViewerInfo> allViewers) {
+        public static void Draw(Plugin plugin, Plugin.ViewerInfo viewer, HashSet<Plugin.ViewerInfo> allViewers, bool showTime = true) {
             var color = GetColor(plugin, viewer);
             var time = viewer.LastSeen.ToString("HH:mm");
 
@@ -38,10 +38,12 @@ namespace PeepingCat.Windows {
 
             Popup.Draw(plugin, viewer);
 
-            ImGui.PushStyleColor(ImGuiCol.Text, color);
-            ImGui.SameLine(windowWidth - ImGui.CalcTextSize(time).X);
-            ImGui.TextUnformatted(time);
-            ImGui.PopStyleColor();
+            if (showTime) {
+                ImGui.PushStyleColor(ImGuiCol.Text, color);
+                ImGui.SameLine(windowWidth - ImGui.CalcTextSize(time).X);
+                ImGui.TextUnformatted(time);
+                ImGui.PopStyleColor();
+            }
         }
 
         private static Vector4 GetColor(Plugin plugin, Plugin.ViewerInfo viewer) {
