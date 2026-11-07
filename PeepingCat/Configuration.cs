@@ -40,7 +40,7 @@ public class Configuration : IPluginConfiguration {
     public Vector4 unloadedColour { get; set; } = new Vector4(0.5f, 0.5f, 0.5f, 1f);
     public Vector4 loadedColour { get; set; } = new Vector4(1f, 1f, 1f, 1f);
 
-    public readonly string DevVersion = "2.3.0.0";
+    public readonly string DevVersion = "2.3.1.0";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 

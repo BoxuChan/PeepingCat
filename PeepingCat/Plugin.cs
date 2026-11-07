@@ -192,7 +192,7 @@ namespace PeepingCat {
 
         private void OnCommand(string command, string args) {
             if (args.Trim().Equals("nearby", StringComparison.OrdinalIgnoreCase)) {
-                NearbyWindow.IsOpen = !NearbyWindow.IsOpen;
+                ToggleNearbyWindow();
                 return;
             }
 
@@ -227,6 +227,7 @@ namespace PeepingCat {
         
         public void DrawConfig() => OnConfig("/pcatconfig", "");
         private void DrawMain() => OnCommand("/pcat", "");
+        public void ToggleNearbyWindow() => NearbyWindow.IsOpen = !NearbyWindow.IsOpen;
 
         public bool HasMoodlesIpc() {
             return GetStatusManagerInfoByPlayerV2.HasFunction;

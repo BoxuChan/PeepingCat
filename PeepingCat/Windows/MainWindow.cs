@@ -11,6 +11,7 @@ namespace PeepingCat.Windows {
     public class MainWindow : Window {
         private Plugin Plugin;
         private readonly TitleBarButton cogButton;
+        private readonly TitleBarButton nearbyButton;
         private bool cogAdded = true;
 
         public MainWindow(Plugin plugin) : base("Peeping Cat", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse) {
@@ -28,8 +29,15 @@ namespace PeepingCat.Windows {
                 Icon = FontAwesomeIcon.Cog,
                 ShowTooltip = () => ImGui.SetTooltip("Opens Config")
             };
+            
+            nearbyButton = new TitleBarButton {
+                Click = (m) => { Plugin.ToggleNearbyWindow(); },
+                Icon = FontAwesomeIcon.Eye,
+                ShowTooltip = () => ImGui.SetTooltip("Opens Nearby Players")
+            };
 
             TitleBarButtons.Add(cogButton);
+            TitleBarButtons.Add(nearbyButton);
         }
 
         public override bool DrawConditions() {
