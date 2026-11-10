@@ -1,7 +1,11 @@
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
+using Dalamud.Interface.Utility;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
@@ -21,6 +25,7 @@ using PeepingCat.Windows;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 namespace PeepingCat {
@@ -34,6 +39,7 @@ namespace PeepingCat {
         [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
         [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
         [PluginService] internal static ICondition Condition { get; private set; } = null!;
+        [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
 
         private const string CommandName1 = "/pcat";
         private const string CommandName2 = "/peepingcat";
@@ -45,6 +51,8 @@ namespace PeepingCat {
         private Dictionary<string, StalkerWindow> stalkerWindows = new();
         private Dictionary<string, ViewerInfo?> stalkerLooksAt = new();
         private MessageWindow? messageWindow;
+        private bool focusSaved;
+        private ulong savedFocusId;
 
         public Configuration Configuration { get; init; }
 
@@ -223,6 +231,46 @@ namespace PeepingCat {
         private void DrawUI() {
             WindowSystem.Draw();
             Popup.DrawBuffModal(this);
+            DrawMarkers();
+        }
+
+        private void DrawMarkers() {
+            if (!Configuration.MarkTargeted && !Configuration.MarkTargeting) {
+                return;
+            }
+
+            if (!ClientState.IsLoggedIn || ObjectTable.LocalPlayer == null) {
+                return;
+            }
+
+            if (Condition[ConditionFlag.WatchingCutscene] || Condition[ConditionFlag.WatchingCutscene78] || Condition[ConditionFlag.OccupiedInCutSceneEvent]) {
+                return;
+            }
+
+            if (Configuration.MarkTargeted && TargetManager.Target is IPlayerCharacter target) {
+                MarkPlayer(target, Configuration.MarkTargetedColour, Configuration.MarkTargetedSize);
+            }
+
+            if (Configuration.MarkTargeting) {
+                foreach (var viewer in viewers.Values) {
+                    if (!viewer.IsActive || !viewer.isLoaded) {
+                        continue;
+                    }
+
+                    if (ObjectTable.SearchById(viewer.lastKnownGameObjectId) is IPlayerCharacter pc) {
+                        MarkPlayer(pc, Configuration.MarkTargetingColour, Configuration.MarkTargetingSize);
+                    }
+                }
+            }
+        }
+
+        private static void MarkPlayer(IGameObject obj, Vector4 colour, float size) {
+            if (!GameGui.WorldToScreen(obj.Position, out var screenPos)) {
+                return;
+            }
+
+            var pos = ImGuiHelpers.MainViewport.Pos + screenPos;
+            ImGui.GetBackgroundDrawList().AddCircleFilled(pos, size, ImGui.GetColorU32(colour), 32);
         }
         
         public void DrawConfig() => OnConfig("/pcatconfig", "");
@@ -303,6 +351,24 @@ namespace PeepingCat {
             return null;
         }
 
+        private bool PassesFilters(IPlayerCharacter character) {
+            var flags = character.StatusFlags;
+
+            if (!Configuration.LogParty && flags.HasFlag(StatusFlags.PartyMember)) {
+                return false;
+            }
+            
+            if (!Configuration.LogAlliance && flags.HasFlag(StatusFlags.AllianceMember)) {
+                return false;
+            }
+            
+            if (!Configuration.LogInCombat && flags.HasFlag(StatusFlags.InCombat)) {
+                return false;
+            }
+
+            return true;
+        }
+        
         private void OnUpdate(IFramework framework) {
             HandleDutyWindowSuppression();
 
@@ -350,6 +416,8 @@ namespace PeepingCat {
                 currentlyLookingAtStalker[stKey] = new HashSet<string>();
             }
 
+            bool windowOpen = IsMainWindowOpen();
+            
             foreach (var obj in ObjectTable) {
                 if (obj is IPlayerCharacter character) {
                     bool isSelf = character.GameObjectId == localPlayerId;
@@ -358,7 +426,7 @@ namespace PeepingCat {
                     if (isSelf) {
                         targetsMe = Configuration.DetectSelfTarget && (character.TargetObjectId == localPlayerId || TargetManager.Target?.GameObjectId == localPlayerId);
                     } else {
-                        targetsMe = character.TargetObjectId == localPlayerId;
+                        targetsMe = character.TargetObjectId == localPlayerId && PassesFilters(character);
                     }
 
                     if (targetsMe) {
@@ -367,10 +435,15 @@ namespace PeepingCat {
 
                         if (!viewers.TryGetValue(charKey, out var viewer)) {
                             viewer = CreateViewer(character);
+                            viewer.SeenWhileClosed = !windowOpen;
                             viewers[charKey] = viewer;
                         } else {
                             viewer.IsActive = true;
                             viewer.LastSeen = DateTime.Now;
+                            
+                            if (windowOpen) {
+                                viewer.SeenWhileClosed = false;
+                            }
                         }
 
                         try {
@@ -475,7 +548,16 @@ namespace PeepingCat {
         }
 
         public List<ViewerInfo> GetViewers() {
-            return viewers.Values.OrderByDescending(v => v.IsActive).ThenByDescending(v => v.LastSeen).Take(15).ToList();
+            var ordered = viewers.Values.OrderByDescending(v => v.IsActive).ThenByDescending(v => v.LastSeen);
+
+            if (!Configuration.KeepHistory) {
+                return ordered.Where(v => v.IsActive).ToList();
+            }
+
+            var active = ordered.Where(v => v.IsActive);
+            var previous = ordered.Where(v => !v.IsActive && (Configuration.HistoryWhenClosed || !v.SeenWhileClosed)).Take(Math.Max(0, Configuration.NumHistory));
+            
+            return active.Concat(previous).ToList();
         }
 
         public void TargetCharacter(ViewerInfo viewer) {
@@ -488,16 +570,34 @@ namespace PeepingCat {
         }
 
         public void HighlightCharacter(ViewerInfo viewer) {
-            var character = FindCharacterInObjectTable(viewer);
-            if (character != null) {
-                if (viewer.isFocused) {
-                    TargetManager.FocusTarget = null;
-                } else {
-                    TargetManager.FocusTarget = character;
-                }
-                
-                viewer.isFocused = !viewer.isFocused;
+            if (viewer.isFocused) {
+                RestoreFocusTarget();
+                viewer.isFocused = false;
+                return;
             }
+
+            var character = FindCharacterInObjectTable(viewer);
+            if (character == null) {
+                return;
+            }
+
+            if (!focusSaved) {
+                savedFocusId = TargetManager.FocusTarget?.GameObjectId ?? 0;
+                focusSaved = true;
+            }
+
+            TargetManager.FocusTarget = character;
+            viewer.isFocused = true;
+        }
+
+        private void RestoreFocusTarget() {
+            if (!focusSaved) {
+                return;
+            }
+
+            TargetManager.FocusTarget = savedFocusId != 0 ? ObjectTable.SearchById(savedFocusId) : null;
+            focusSaved = false;
+            savedFocusId = 0;
         }
 
         public IPlayerCharacter? FindCharacterInObjectTable(ViewerInfo viewer) {
@@ -729,6 +829,7 @@ namespace PeepingCat {
             public DateTime LastSeen { get; set; }
             public ulong lastKnownGameObjectId { get; set; }
             public ulong cid { get; set; }
+            public bool SeenWhileClosed { get; set; }
         }
 
         public ViewerInfo CreateViewer(IPlayerCharacter character) {
