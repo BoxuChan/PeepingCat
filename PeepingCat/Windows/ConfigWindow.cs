@@ -523,6 +523,27 @@ namespace PeepingCat.Windows {
             }
 
             ImGui.Unindent();
+            
+            DrawTitle("Nearby Players", Green);
+
+            var colourMoodles = Configuration.ColourMoodlesNearby;
+            if (ImGui.Checkbox("Colour players with Moodles", ref colourMoodles)) {
+                Configuration.ColourMoodlesNearby = colourMoodles;
+                Configuration.Save();
+            }
+            if (ImGui.IsItemHovered()) {
+                ImGui.SetTooltip("Colours the names of players in the Nearby Players window who currently have Moodles applied.");
+            }
+
+            var moodlesColor = Configuration.moodlesColour;
+            if (ImGui.ColorEdit4("Moodles", ref moodlesColor, colorPickerFlags)) {
+                Configuration.moodlesColour = moodlesColor;
+                Configuration.Save();
+            }
+
+            if (!plugin.HasMoodlesIpc()) {
+                ImGui.TextDisabled("Moodles not detected.");
+            }
         }
 
         private void DrawAboutTab() {

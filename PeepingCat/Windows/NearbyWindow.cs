@@ -15,10 +15,11 @@ namespace PeepingCat.Windows {
 
         private readonly Plugin plugin;
         private readonly Dictionary<string, Plugin.ViewerInfo> nearby = new();
+        private readonly HashSet<Plugin.ViewerInfo> withMoodles = new();
         private List<Plugin.ViewerInfo> sorted = new();
         private long lastScan;
 
-        public NearbyWindow(Plugin plugin) : base("Nearby Players") {
+        public NearbyWindow(Plugin plugin) : base("Peeping Cat - Nearby Players") {
             this.plugin = plugin;
 
             SizeConstraints = new WindowSizeConstraints {
@@ -31,18 +32,30 @@ namespace PeepingCat.Windows {
 
         public override void OnClose() {
             nearby.Clear();
+            withMoodles.Clear();
             sorted = new List<Plugin.ViewerInfo>();
             lastScan = 0;
         }
 
+        private bool HasMoodles(IPlayerCharacter player) {
+            try {
+                return plugin.TryGetMoodlesStatus(player).Count > 0;
+            } catch {
+                return false;
+            }
+        }
+
         private void Scan() {
             var local = Svc.Objects.LocalPlayer;
+            withMoodles.Clear();
+
             if (local == null) {
                 nearby.Clear();
                 sorted = new List<Plugin.ViewerInfo>();
                 return;
             }
 
+            bool checkMoodles = plugin.Configuration.ColourMoodlesNearby && plugin.HasMoodlesIpc();
             var seen = new HashSet<string>();
 
             foreach (var obj in Svc.Objects) {
@@ -60,13 +73,19 @@ namespace PeepingCat.Windows {
                 } else {
                     viewer.lastKnownGameObjectId = player.GameObjectId;
                 }
+
+                if (checkMoodles && HasMoodles(player)) {
+                    withMoodles.Add(viewer);
+                }
             }
 
             foreach (var key in nearby.Keys.Where(k => !seen.Contains(k)).ToList()) {
                 nearby.Remove(key);
             }
 
-            sorted = nearby.Values.OrderBy(v => v.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            sorted = nearby.Values
+                .OrderBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         public override void Draw() {
@@ -77,12 +96,14 @@ namespace PeepingCat.Windows {
             }
 
             var allViewers = plugin.GetAllViewers();
+            var moodlesColour = plugin.Configuration.moodlesColour;
             float height = ImGui.GetContentRegionAvail().Y - ImGui.GetStyle().ItemSpacing.Y;
 
             if (ImGui.BeginListBox("##nearby", new Vector2(-1, height))) {
                 if (sorted.Count > 0) {
                     foreach (var viewer in sorted) {
-                        ViewerRow.Draw(plugin, viewer, allViewers, false);
+                        Vector4? colour = withMoodles.Contains(viewer) ? moodlesColour : null;
+                        ViewerRow.Draw(plugin, viewer, allViewers, false, colour);
                     }
                 } else {
                     ImGui.TextDisabled("Nobody nearby.");

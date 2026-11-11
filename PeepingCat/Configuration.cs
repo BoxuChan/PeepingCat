@@ -33,6 +33,8 @@ public class Configuration : IPluginConfiguration {
     public bool SearchInfoOption { get; set; } = true;
     public bool ViewSearchInfoOption { get; set; } = true;
     public bool BuffInfoOption { get; set; } = true;
+    public bool ColourMoodlesNearby { get; set; }
+    public Vector4 moodlesColour { get; set; } = new Vector4(0.8f, 0.5f, 1.0f, 1.0f);
     public bool ShowNoViewersText { get; set; }
     public bool DetectSelfTarget { get; set; }
     public bool Chat2MenuOption { get; set; } = false;
@@ -54,7 +56,7 @@ public class Configuration : IPluginConfiguration {
     public Vector4 MarkTargetingColour { get; set; } = new Vector4(1f, 0f, 0f, 1f);
     public float MarkTargetingSize { get; set; } = 4f;
 
-    public readonly string DevVersion = "2.4.0.0";
+    public readonly string DevVersion = "2.4.1.0";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 

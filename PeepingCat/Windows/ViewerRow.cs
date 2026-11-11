@@ -6,9 +6,9 @@ using System.Numerics;
 
 namespace PeepingCat.Windows {
     public static class ViewerRow {
-        public static void Draw(Plugin plugin, Plugin.ViewerInfo viewer, HashSet<Plugin.ViewerInfo> allViewers, bool showTime = true) {
+        public static void Draw(Plugin plugin, Plugin.ViewerInfo viewer, HashSet<Plugin.ViewerInfo> allViewers, bool showTime = true, Vector4? colourOverride = null) {
             var cfg = plugin.Configuration;
-            var color = GetColor(plugin, viewer);
+            var color = colourOverride ?? GetColor(plugin, viewer);
             var time = FormatTime(viewer.LastSeen, cfg.Use24HourTime);
 
             ImGui.PushStyleColor(ImGuiCol.Text, color);
