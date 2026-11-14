@@ -77,6 +77,7 @@ namespace PeepingCat {
         
         private Chat2Integration chat2Integration = null!;
         private NearbyWindow NearbyWindow = null!;
+        private readonly ICallGateSubscriber<string, bool, object> xivMessengerOpen;
 
         public Plugin() {
             Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
@@ -121,6 +122,7 @@ namespace PeepingCat {
             Framework.Update += OnUpdate;
             Framework.Update += OnSearchInfoUpdate;
             GetStatusManagerInfoByPlayerV2 = Svc.PluginInterface.GetIpcSubscriber<IPlayerCharacter, List<MoodlesStatusInfo>>("Moodles.GetStatusManagerInfoByPlayerV2");
+            xivMessengerOpen = Svc.PluginInterface.GetIpcSubscriber<string, bool, object>("Messenger.OpenMessenger");
             
             chat2Integration = new Chat2Integration(this, PluginInterface);
             if (Configuration.Chat2MenuOption) {
@@ -788,7 +790,33 @@ namespace PeepingCat {
             }
         }
 
+        public bool HasXIVMessagerIpc() {
+            return xivMessengerOpen.HasAction;
+        }
+
+        private bool TryOpenXIVMessager(ViewerInfo viewer) {
+            if (!xivMessengerOpen.HasAction) {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(viewer.Name) || string.IsNullOrWhiteSpace(viewer.World) || viewer.World == "Unknown") {
+                return false;
+            }
+
+            try {
+                xivMessengerOpen.InvokeAction(GetViewerKey(viewer), true);
+                return true;
+            } catch (Exception ex) {
+                Svc.Log.Warning($"XIV Instant Messenger IPC failed: {ex.Message}");
+                return false;
+            }
+        }
+
         public void OpenMessageWindow(ViewerInfo viewer) {
+            if (Configuration.UseXIVMessenger && TryOpenXIVMessager(viewer)) {
+                return;
+            }
+
             if (messageWindow == null) {
                 messageWindow = new MessageWindow(this, viewer);
                 WindowSystem.AddWindow(messageWindow);

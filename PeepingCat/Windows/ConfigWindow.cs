@@ -185,6 +185,19 @@ namespace PeepingCat.Windows {
             if (ImGui.IsItemHovered()) {
                 ImGui.SetTooltip("Adds Peeping Cat's actions to Chat 2's right-click menu. Does nothing if Chat 2 isn't installed.");
             }
+
+            var useXim = Configuration.UseXIVMessenger;
+            if (ImGui.Checkbox("Use XIV Instant Messenger for Send Tell", ref useXim)) {
+                Configuration.UseXIVMessenger = useXim;
+                Configuration.Save();
+            }
+            if (ImGui.IsItemHovered()) {
+                ImGui.SetTooltip("Opens the XIV Instant Messenger chat with that player instead of the quick message window.");
+            }
+
+            if (!plugin.HasXIVMessagerIpc()) {
+                ImGui.TextDisabled("XIV Instant Messenger not detected.");
+            }
         }
 
         private void DrawWindowTab() {

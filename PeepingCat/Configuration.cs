@@ -55,8 +55,9 @@ public class Configuration : IPluginConfiguration {
     public bool MarkTargeting { get; set; }
     public Vector4 MarkTargetingColour { get; set; } = new Vector4(1f, 0f, 0f, 1f);
     public float MarkTargetingSize { get; set; } = 4f;
+    public bool UseXIVMessenger { get; set; }
 
-    public readonly string DevVersion = "2.4.1.0";
+    public readonly string DevVersion = "2.5.0.0";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 
