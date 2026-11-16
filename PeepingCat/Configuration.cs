@@ -33,6 +33,7 @@ public class Configuration : IPluginConfiguration {
     public bool StalkOption { get; set; }
     public bool StalkOwnMinionPet { get; set; }
     public bool SearchInfoOption { get; set; } = true;
+    public bool LodestoneOption { get; set; } = true;
     public bool ViewSearchInfoOption { get; set; } = true;
     public bool BuffInfoOption { get; set; } = true;
     public bool ColourMoodlesNearby { get; set; }
@@ -61,7 +62,7 @@ public class Configuration : IPluginConfiguration {
     public bool UseXIVMessenger { get; set; }
     public bool UsePetNicknames { get; set; }
 
-    public readonly string DevVersion = "2.6.1.0";
+    public readonly string DevVersion = "2.7.0.0";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 

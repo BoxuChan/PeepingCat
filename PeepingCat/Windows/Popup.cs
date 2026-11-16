@@ -4,6 +4,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Utility;
 
 using ECommons.DalamudServices;
 using ECommons.GameFunctions;
@@ -11,9 +12,15 @@ using ECommons.GameFunctions;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
 using System.Numerics;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PeepingCat.Windows {
     public static class Popup {
@@ -36,9 +43,88 @@ namespace PeepingCat.Windows {
 
         private static readonly string[] MenuLabels = {
             "Send Tell", "Use Emote", "View Buffs (99)", "Stalk",
-            "Open Context Menu", "View Search Info", "View Adventurer Plate", "Examine"
+            "Open Context Menu", "Open Lodestone", "View Search Info", "View Adventurer Plate", "Examine"
         };
 
+        private static string GetLodestoneRegion() {
+            try {
+                switch (Svc.Data.Language) {
+                    case Dalamud.Game.ClientLanguage.Japanese:
+                        return "jp";
+                    case Dalamud.Game.ClientLanguage.German:
+                        return "de";
+                    case Dalamud.Game.ClientLanguage.French:
+                        return "fr";
+                }
+
+                var player = Svc.Objects.LocalPlayer;
+                if (player != null && player.HomeWorld.Value.DataCenter.Value.Region.RowId == 3) {
+                    return "eu";
+                }
+            } catch { }
+
+            return "na";
+        }
+
+        private static readonly HttpClient LodestoneHttp = new();
+        private static readonly ConcurrentDictionary<string, string> LodestoneIdCache = new();
+        private static readonly ConcurrentDictionary<string, byte> LodestoneLookups = new();
+
+        private static readonly Regex LodestoneEntryRegex = new(@"/lodestone/character/(\d+)/""[\s\S]{0,1500}?entry__name"">([^<]+)<", RegexOptions.Compiled);
+
+        public static void OpenLodestone(Plugin.ViewerInfo viewer) {
+            string region = GetLodestoneRegion();
+            string key = $"{viewer.Name}@{viewer.World}";
+            string searchUrl = $"https://{region}.finalfantasyxiv.com/lodestone/character/" + $"?q={Uri.EscapeDataString(viewer.Name)}&worldname={Uri.EscapeDataString(viewer.World)}";
+
+            if (LodestoneIdCache.TryGetValue(key, out var knownId)) {
+                Util.OpenLink($"https://{region}.finalfantasyxiv.com/lodestone/character/{knownId}/");
+                return;
+            }
+
+            if (!LodestoneLookups.TryAdd(key, 0)) {
+                return;
+            }
+
+            Task.Run(async () => {
+                string url = searchUrl;
+
+                try {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                    using var request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+                    request.Headers.UserAgent.ParseAdd("PeepingCat");
+
+                    using var response = await LodestoneHttp.SendAsync(request, cts.Token);
+                    if (response.IsSuccessStatusCode) {
+                        using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+                        var buffer = new byte[512 * 1024];
+                        int total = 0;
+                        int read;
+                        
+                        while (total < buffer.Length && (read = await stream.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cts.Token)) > 0) { 
+                            total += read;
+                        }
+                        
+                        string html = Encoding.UTF8.GetString(buffer, 0, total);
+
+                        foreach (Match match in LodestoneEntryRegex.Matches(html)) {
+                            string name = WebUtility.HtmlDecode(match.Groups[2].Value).Trim();
+                            if (string.Equals(name, viewer.Name, StringComparison.OrdinalIgnoreCase)) {
+                                string id = match.Groups[1].Value;
+                                LodestoneIdCache[key] = id;
+                                url = $"https://{region}.finalfantasyxiv.com/lodestone/character/{id}/";
+                                break;
+                            }
+                        }
+                    }
+                } catch { } finally {
+                    LodestoneLookups.TryRemove(key, out _);
+                }
+
+                Util.OpenLink(url);
+            });
+        }
+        
         public static void OpenGameContextMenu(Plugin.ViewerInfo viewer) {
             IGameObject? character = Svc.Objects.SearchById(viewer.lastKnownGameObjectId);
             if (character == null) {
@@ -109,10 +195,11 @@ namespace PeepingCat.Windows {
                 bool showEmote = Plugin.Configuration.EmoteOption && viewer.isLoaded;
                 bool showStalk = Plugin.Configuration.StalkOption && viewer.isLoaded;
                 bool showContext = Plugin.Configuration.SearchInfoOption && viewer.isLoaded;
+                bool showLodestone = Plugin.Configuration.LodestoneOption && !string.IsNullOrWhiteSpace(viewer.Name) && !string.IsNullOrWhiteSpace(viewer.World) && viewer.World != "Unknown";
                 bool showSearchInfo = Plugin.Configuration.ViewSearchInfoOption && !string.IsNullOrWhiteSpace(viewer.Name);
                 bool showPlate = Plugin.Configuration.AdventurePlateOption && (viewer.cid != 0 || viewer.isLoaded);
                 bool showExamine = Plugin.Configuration.ExamineOption && viewer.isLoaded;
-
+                
                 bool drewFirstGroup = false;
 
                 if (showTell && IconMenuItem(FontAwesomeIcon.Comment, "Send Tell")) {
@@ -134,12 +221,16 @@ namespace PeepingCat.Windows {
                 }
                 drewFirstGroup |= showStalk;
 
-                if (drewFirstGroup && (showContext || showSearchInfo || showPlate || showExamine)) {
+                if (drewFirstGroup && (showContext || showSearchInfo || showPlate || showExamine || showLodestone)) {
                     ImGui.Dummy(new Vector2(0, 14f * ImGuiHelpers.GlobalScale));
                 }
 
                 if (showContext && IconMenuItem(FontAwesomeIcon.Bars, "Open Context Menu")) {
                     OpenGameContextMenu(viewer);
+                }
+                
+                if (showLodestone && IconMenuItem(FontAwesomeIcon.ExternalLinkAlt, "Open Lodestone")) {
+                    OpenLodestone(viewer);
                 }
 
                 if (showSearchInfo && IconMenuItem(FontAwesomeIcon.InfoCircle, "View Search Info")) {

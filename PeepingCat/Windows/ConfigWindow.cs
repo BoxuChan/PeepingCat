@@ -25,7 +25,7 @@ namespace PeepingCat.Windows {
         private SoundManager SoundManager;
 
         public ConfigWindow(Plugin plugin) : base("Peeping Cat - Settings") {
-            Flags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
+            Flags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
 
             SizeConstraints = new WindowSizeConstraints {
                 MinimumSize = new Vector2(560, 300),
@@ -195,6 +195,7 @@ namespace PeepingCat.Windows {
             DrawSubTitle("Player Info", Blue);
             ImGui.Indent();
             Toggle("Open Context Menu", Configuration.SearchInfoOption, v => Configuration.SearchInfoOption = v);
+            Toggle("Open Lodestone", Configuration.LodestoneOption, v => Configuration.LodestoneOption = v, "Opens the Lodestone character search for this player in your browser.");
             Toggle("View Search Info", Configuration.ViewSearchInfoOption, v => Configuration.ViewSearchInfoOption = v, "Looks the player up through the game's player search and opens their Search Info window. Only works for players who are online and searchable.");
             Toggle("View Adventurer Plate", Configuration.AdventurePlateOption, v => Configuration.AdventurePlateOption = v);
             Toggle("Examine", Configuration.ExamineOption, v => Configuration.ExamineOption = v);
