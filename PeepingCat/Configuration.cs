@@ -48,6 +48,7 @@ public class Configuration : IPluginConfiguration {
     public bool LogInCombat { get; set; } = true;
     public bool KeepHistory { get; set; } = true;
     public bool HistoryWhenClosed { get; set; } = true;
+    public bool KeepOwnCompanionHistory { get; set; } = false;
     public int NumHistory { get; set; } = 15;
     public bool ShowTimestamps { get; set; } = true;
     public bool Use24HourTime { get; set; } = true;
@@ -60,7 +61,7 @@ public class Configuration : IPluginConfiguration {
     public bool UseXIVMessenger { get; set; }
     public bool UsePetNicknames { get; set; }
 
-    public readonly string DevVersion = "2.6.0.0";
+    public readonly string DevVersion = "2.6.1.0";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 

@@ -1019,6 +1019,7 @@ namespace PeepingCat {
             public ObjectTargetInfo? TargetObject { get; set; }
             public bool IsLoaded { get; set; }
             public long LastRebind { get; set; }
+            public bool IsOwn { get; set; }
             public StalkerWindow? Window { get; set; }
         }
 
@@ -1120,7 +1121,7 @@ namespace PeepingCat {
             RefreshOwnCompanions(true);
             var obj = ownMinionId != 0 ? ObjectTable.SearchById(ownMinionId) : null;
             if (obj != null) {
-                OpenObjectStalkWindow(BuildObjectInfo(obj));
+                ToggleOwnObjectStalkWindow(BuildObjectInfo(obj));
             }
         }
 
@@ -1128,7 +1129,21 @@ namespace PeepingCat {
             RefreshOwnCompanions(true);
             var obj = ownPetId != 0 ? ObjectTable.SearchById(ownPetId) : null;
             if (obj != null) {
-                OpenObjectStalkWindow(BuildObjectInfo(obj));
+                ToggleOwnObjectStalkWindow(BuildObjectInfo(obj));
+            }
+        }
+        
+        private void ToggleOwnObjectStalkWindow(ObjectTargetInfo info) {
+            string key = GetObjectKey(info);
+
+            if (objectStalks.TryGetValue(key, out var existing) && existing.Window != null) {
+                existing.Window.IsOpen = !existing.Window.IsOpen;
+                return;
+            }
+
+            OpenObjectStalkWindow(info);
+            if (objectStalks.TryGetValue(key, out var created)) {
+                created.IsOwn = true;
             }
         }
 
@@ -1180,7 +1195,8 @@ namespace PeepingCat {
 
             var ordered = stalk.Viewers.Values.OrderByDescending(v => v.IsActive).ThenByDescending(v => v.LastSeen);
 
-            if (!Configuration.KeepHistory) {
+            bool keep = Configuration.KeepHistory || (stalk.IsOwn && Configuration.KeepOwnCompanionHistory);
+            if (!keep) {
                 return ordered.Where(v => v.IsActive).ToList();
             }
 
@@ -1259,6 +1275,13 @@ namespace PeepingCat {
         private void UpdateObjectStalks(long currentTick) {
             if (objectStalks.Count == 0) {
                 return;
+            }
+            
+            if (!Configuration.KeepOwnCompanionHistory) {
+                var stale = objectStalks.Where(e => e.Value.IsOwn && e.Value.Window is { IsOpen: false }).Select(e => e.Key).ToList();
+                foreach (var key in stale) {
+                    CloseObjectStalkWindow(key);
+                }
             }
 
             var idToKey = new Dictionary<ulong, string>();

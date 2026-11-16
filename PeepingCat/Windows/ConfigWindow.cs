@@ -340,6 +340,11 @@ namespace PeepingCat.Windows {
             ImGui.BeginDisabled(!Configuration.KeepHistory);
             Toggle("Record history when window is closed", Configuration.HistoryWhenClosed, v => Configuration.HistoryWhenClosed = v);
 
+            bool keepOwn = Configuration.KeepOwnCompanionHistory;
+            if (ImGui.Checkbox("Keep history for my own minion/pet", ref keepOwn)) {
+                Configuration.KeepOwnCompanionHistory = keepOwn;
+            }
+            
             var numHistory = Math.Clamp(Configuration.NumHistory, 1, 50);
             if (ImGui.SliderInt("Previous targeters to keep", ref numHistory, 1, 50)) {
                 Configuration.NumHistory = Math.Clamp(numHistory, 1, 50);

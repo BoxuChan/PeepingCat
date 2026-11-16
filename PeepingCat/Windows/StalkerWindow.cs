@@ -36,6 +36,12 @@ namespace PeepingCat.Windows {
 
         public override void OnClose() {
             if (objectKey != null) {
+                var stalk = Plugin.GetObjectStalk(objectKey);
+                if (stalk != null && stalk.IsOwn && Plugin.Configuration.KeepOwnCompanionHistory) {
+                    base.OnClose();
+                    return;
+                }
+
                 Plugin.CloseObjectStalkWindow(objectKey);
             } else if (user != null) {
                 Plugin.CloseStalkerWindow(user);
