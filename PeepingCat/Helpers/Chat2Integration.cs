@@ -1,21 +1,21 @@
-﻿using Dalamud.Bindings.ImGui;
+﻿using System;
+using System.Collections.Generic;
+using System.Numerics;
+
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Plugin;
-using Dalamud.Plugin.Ipc;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
+using Dalamud.Plugin;
+using Dalamud.Plugin.Ipc;
 
 using ECommons.DalamudServices;
 
 using PeepingCat.Windows;
 
-using System;
-using System.Collections.Generic;
-using System.Numerics;
-
-namespace PeepingCat;
+namespace PeepingCat.Helpers;
 
 public sealed class Chat2Integration : IDisposable {
     private readonly Plugin plugin;
@@ -91,7 +91,7 @@ public sealed class Chat2Integration : IDisposable {
 
             var viewer = nearby != null ? plugin.CreateViewer(nearby) : new Plugin.ViewerInfo { Name = name, World = world, cid = contentId };
 
-            bool showEmote = cfg.DoteOption && nearby != null;
+            bool showEmote = cfg.EmoteOption && nearby != null;
             bool showStalk = cfg.StalkOption && nearby != null;
             bool showContext = cfg.SearchInfoOption && nearby != null;
             bool showSearchInfo = cfg.ViewSearchInfoOption && !string.IsNullOrWhiteSpace(name);

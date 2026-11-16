@@ -10,7 +10,7 @@ namespace PeepingCat.Helpers {
         private Plugin Plugin;
 
         public SoundManager(Plugin plugin) {
-            this.Plugin = plugin;
+            Plugin = plugin;
         }
 
         public void CheckSoundFile() {

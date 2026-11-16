@@ -83,9 +83,7 @@ namespace PeepingCat.Windows {
                 nearby.Remove(key);
             }
 
-            sorted = nearby.Values
-                .OrderBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            sorted = nearby.Values.OrderBy(v => v.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         public override void Draw() {

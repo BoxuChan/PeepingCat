@@ -18,15 +18,19 @@ using ECommons.GameFunctions;
 
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using Companion = FFXIVClientStructs.FFXIV.Client.Game.Character.Companion;
 using Lumina.Excel.Sheets;
-
-using PeepingCat.Windows;
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using PeepingCat.Windows;
+using PeepingCat.Helpers;
 
 namespace PeepingCat {
     public sealed class Plugin : IDalamudPlugin {
@@ -44,12 +48,15 @@ namespace PeepingCat {
         private const string CommandName1 = "/pcat";
         private const string CommandName2 = "/peepingcat";
         private const string CommandName3 = "/pcatconfig";
+        private const string CommandName4 = "/pcat nearby";
 
         private Dictionary<string, ViewerInfo> viewers = new();
         private Dictionary<string, ViewerInfo> unknownViewer = new();
         private Dictionary<string, Dictionary<string, ViewerInfo>> stalkerViewers = new();
         private Dictionary<string, StalkerWindow> stalkerWindows = new();
         private Dictionary<string, ViewerInfo?> stalkerLooksAt = new();
+        private Dictionary<string, ObjectTargetInfo?> stalkerObjectTarget = new();
+        private Dictionary<string, ObjectStalk> objectStalks = new();
         private MessageWindow? messageWindow;
         private bool focusSaved;
         private ulong savedFocusId;
@@ -59,7 +66,7 @@ namespace PeepingCat {
         public readonly WindowSystem WindowSystem = new("Peeping Cat");
         private MainWindow MainWindow { get; init; }
         private ConfigWindow ConfigWindow { get; init; }
-        private Helpers.SoundManager SoundManager { get; init; }
+        private SoundManager SoundManager { get; init; }
 
         private readonly Dictionary<uint, string> worldNames = new();
 
@@ -78,13 +85,24 @@ namespace PeepingCat {
         private Chat2Integration chat2Integration = null!;
         private NearbyWindow NearbyWindow = null!;
         private readonly ICallGateSubscriber<string, bool, object> xivMessengerOpen;
+        
+        private readonly ICallGateSubscriber<bool> petNicknamesEnabled;
+        private List<string>? petNames;
+        private List<nint>? petAddresses;
+        private Dictionary<ulong, string>? petLegacyNames;
+        private bool petDataTouched;
+        private long lastPetLookupTick;
+        private List<Vector3?>? petTextColours;
+        private List<Vector3?>? petEdgeColours;
+        
+        private readonly Dictionary<ulong, (string Title, Vector4? Text, Vector4? Edge)> nameplateCache = new();
 
         public Plugin() {
             Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
             MainWindow = new MainWindow(this);
             ConfigWindow = new ConfigWindow(this);
-            SoundManager = new Helpers.SoundManager(this); 
+            SoundManager = new SoundManager(this); 
             NearbyWindow = new NearbyWindow(this);
             
             WindowSystem.AddWindow(MainWindow);
@@ -101,6 +119,10 @@ namespace PeepingCat {
 
             CommandManager.AddHandler(CommandName3, new CommandInfo(OnConfig) {
                 HelpMessage = "Opens P-Cat Config."
+            });
+            
+            CommandManager.AddHandler(CommandName4, new CommandInfo(OnConfig) {
+                HelpMessage = "Opens Nearby Players Window."
             });
 
             PluginInterface.UiBuilder.Draw += DrawUI;
@@ -123,6 +145,7 @@ namespace PeepingCat {
             Framework.Update += OnSearchInfoUpdate;
             GetStatusManagerInfoByPlayerV2 = Svc.PluginInterface.GetIpcSubscriber<IPlayerCharacter, List<MoodlesStatusInfo>>("Moodles.GetStatusManagerInfoByPlayerV2");
             xivMessengerOpen = Svc.PluginInterface.GetIpcSubscriber<string, bool, object>("Messenger.OpenMessenger");
+            petNicknamesEnabled = Svc.PluginInterface.GetIpcSubscriber<bool>("PetRenamer.IsEnabled");
             
             chat2Integration = new Chat2Integration(this, PluginInterface);
             if (Configuration.Chat2MenuOption) {
@@ -139,6 +162,10 @@ namespace PeepingCat {
         }
 
         public bool ShouldSuppressDutySound() {
+            if (ClientState.IsPvP) {
+                return Configuration.SuppressSoundWhileInPvP;
+            }
+
             return Configuration.SuppressSoundWhileInDuty && IsInDutyInstance();
         }
 
@@ -180,6 +207,7 @@ namespace PeepingCat {
             CommandManager.RemoveHandler(CommandName1);
             CommandManager.RemoveHandler(CommandName2);
             CommandManager.RemoveHandler(CommandName3);
+            CommandManager.RemoveHandler(CommandName4);
 
             PluginInterface.UiBuilder.Draw -= DrawUI;
             PluginInterface.UiBuilder.OpenConfigUi -= DrawConfig;
@@ -197,6 +225,14 @@ namespace PeepingCat {
                 }
             }
 
+            if (petDataTouched) {
+                foreach (var tag in new[] { "PetRenamer.PetNicknamesStrings", "PetRenamer.PetNicknamesAddresses", "PetRenamer.GameObjectRenameDict", "PetRenamer.PetNicknamesTextColours", "PetRenamer.PetNicknamesEdgeColours" }) {
+                    try {
+                        PluginInterface.RelinquishData(tag);
+                    } catch { }
+                }
+            }
+            
             ECommonsMain.Dispose();
         }
 
@@ -305,6 +341,7 @@ namespace PeepingCat {
             unknownViewer.Remove(stalkerKey);
             stalkerViewers.Remove(stalkerKey);
             stalkerLooksAt.Remove(stalkerKey);
+            stalkerObjectTarget.Remove(stalkerKey);
 
             if (stalkerWindows.Remove(stalkerKey, out var window)) {
                 WindowSystem.RemoveWindow(window);
@@ -324,6 +361,7 @@ namespace PeepingCat {
 
             stalkerViewers[stalkerKey] = new Dictionary<string, ViewerInfo>();
             stalkerLooksAt[stalkerKey] = null;
+            stalkerObjectTarget[stalkerKey] = null;
             var stalkerWindow = new StalkerWindow(this, viewer);
             WindowSystem.AddWindow(stalkerWindow);
             stalkerWindows[stalkerKey] = stalkerWindow;
@@ -466,21 +504,24 @@ namespace PeepingCat {
                     }
 
                     if (stalkedIds.TryGetValue(character.GameObjectId, out var stalker2)) {
-                        if (character.TargetObject == null) {
+                        var targetObject = ObjectTable.SearchById(character.TargetObjectId);
+
+                        if (targetObject == null) {
                             stalkerLooksAt[stalker2] = null;
-                        } else {
-                            var possibleTarget = ObjectTable.SearchById(character.TargetObjectId) as IPlayerCharacter;
-                            if (possibleTarget == null) {
-                                stalkerLooksAt[stalker2] = null;
-                            } else {
-                                if (stalkerLooksAt[stalker2] != null) {
-                                    if (GetViewerKey(stalkerLooksAt[stalker2]!) != $"{possibleTarget.Name.TextValue}@{GetWorldName(possibleTarget.HomeWorld.RowId)}") {
-                                        stalkerLooksAt[stalker2] = CreateViewer(possibleTarget);
-                                    }
-                                } else {
+                            stalkerObjectTarget[stalker2] = null;
+                        } else if (targetObject is IPlayerCharacter possibleTarget) {
+                            stalkerObjectTarget[stalker2] = null;
+
+                            if (stalkerLooksAt[stalker2] != null) {
+                                if (GetViewerKey(stalkerLooksAt[stalker2]!) != $"{possibleTarget.Name.TextValue}@{GetWorldName(possibleTarget.HomeWorld.RowId)}") {
                                     stalkerLooksAt[stalker2] = CreateViewer(possibleTarget);
                                 }
+                            } else {
+                                stalkerLooksAt[stalker2] = CreateViewer(possibleTarget);
                             }
+                        } else {
+                            stalkerLooksAt[stalker2] = null;
+                            stalkerObjectTarget[stalker2] = BuildObjectInfo(targetObject);
                         }
                     }
                 }
@@ -501,6 +542,8 @@ namespace PeepingCat {
                     }
                 }
             }
+
+            UpdateObjectStalks(currentTick);
         }
 
         private void TryPlayViewerSound(ViewerInfo viewer, long currentTick) {
@@ -543,6 +586,16 @@ namespace PeepingCat {
             foreach (var key in stalkerLooksAt.Values) {
                 if (key != null) {
                     set.Add(key);
+                }
+            }
+
+            foreach (var stalk in objectStalks.Values) {
+                foreach (var viewer in stalk.Viewers.Values) {
+                    set.Add(viewer);
+                }
+
+                if (stalk.TargetPlayer != null) {
+                    set.Add(stalk.TargetPlayer);
                 }
             }
 
@@ -825,6 +878,94 @@ namespace PeepingCat {
             }
         }
 
+        private static string CleanName(string text) {
+            if (string.IsNullOrWhiteSpace(text)) {
+                return text;
+            }
+
+            text = text.Trim();
+            return char.ToUpperInvariant(text[0]) + text.Substring(1);
+        }
+        
+        public bool HasPetNicknames() {
+            try {
+                return petNicknamesEnabled.HasFunction && petNicknamesEnabled.InvokeFunc();
+            } catch {
+                return false;
+            }
+        }
+
+        private bool EnsurePetNicknameData() {
+            if (petNames != null && petAddresses != null) {
+                return true;
+            }
+
+            long now = Environment.TickCount64;
+            if (now - lastPetLookupTick < 5000) {
+                return false;
+            }
+            lastPetLookupTick = now;
+
+            try {
+                if (PluginInterface.TryGetData<List<string>>("PetRenamer.PetNicknamesStrings", out var names)) {
+                    petDataTouched = true;
+
+                    if (PluginInterface.TryGetData<List<nint>>("PetRenamer.PetNicknamesAddresses", out var addresses)) {
+                        petNames = names;
+                        petAddresses = addresses;
+                        PluginInterface.TryGetData("PetRenamer.GameObjectRenameDict", out petLegacyNames);
+                        PluginInterface.TryGetData("PetRenamer.PetNicknamesTextColours", out petTextColours);
+                        PluginInterface.TryGetData("PetRenamer.PetNicknamesEdgeColours", out petEdgeColours);
+                        return true;
+                    }
+                }
+            } catch { }
+
+            return false;
+        }
+
+        private bool TryGetPetNickname(IGameObject obj, out string nickname, out Vector4? textColour, out Vector4? edgeColour) {
+            nickname = string.Empty;
+            textColour = null;
+            edgeColour = null;
+
+            if (!Configuration.UsePetNicknames || !EnsurePetNicknameData()) {
+                return false;
+            }
+
+            try {
+                nint address = obj.Address;
+                int count = Math.Min(petAddresses!.Count, petNames!.Count);
+
+                for (int i = 0; i < count; i++) {
+                    if (petAddresses[i] != address || string.IsNullOrWhiteSpace(petNames[i])) {
+                        continue;
+                    }
+
+                    nickname = petNames[i];
+                    textColour = ToColour(petTextColours, i);
+                    edgeColour = ToColour(petEdgeColours, i);
+                    return true;
+                }
+
+                if (petLegacyNames != null && petLegacyNames.TryGetValue(obj.GameObjectId, out var legacy) && !string.IsNullOrWhiteSpace(legacy)) {
+                    nickname = legacy;
+                    return true;
+                }
+            } catch { }
+
+            return false;
+        }
+
+        private static Vector4? ToColour(List<Vector3?>? list, int index) {
+            if (list == null || index >= list.Count) {
+                return null;
+            }
+
+            var colour = list[index];
+            return colour.HasValue ? new Vector4(colour.Value.X, colour.Value.Y, colour.Value.Z, 1f) : null;
+        }
+        
         public bool IsMainWindowOpen() {
             return MainWindow.IsOpen;
         }
@@ -858,6 +999,468 @@ namespace PeepingCat {
             public ulong lastKnownGameObjectId { get; set; }
             public ulong cid { get; set; }
             public bool SeenWhileClosed { get; set; }
+        }
+        
+        public class ObjectTargetInfo {
+            public string Name { get; set; } = string.Empty;
+            public string KindLabel { get; set; } = string.Empty;
+            public ulong GameObjectId { get; set; }
+            public string OriginalName { get; set; } = string.Empty;
+            public string OwnerName { get; set; } = string.Empty;
+            public string Title { get; set; } = string.Empty;
+            public Vector4? TextColour { get; set; }
+            public Vector4? EdgeColour { get; set; }
+        }
+        
+        public class ObjectStalk {
+            public ObjectTargetInfo Info { get; set; } = new();
+            public Dictionary<string, ViewerInfo> Viewers { get; } = new();
+            public ViewerInfo? TargetPlayer { get; set; }
+            public ObjectTargetInfo? TargetObject { get; set; }
+            public bool IsLoaded { get; set; }
+            public long LastRebind { get; set; }
+            public StalkerWindow? Window { get; set; }
+        }
+
+        public static string GetObjectKey(ObjectTargetInfo info) {
+            return $"{info.KindLabel}|{info.OriginalName}|{info.OwnerName}";
+        }
+
+        private const long OwnCompanionScanIntervalMs = 500;
+        private ulong ownMinionId;
+        private ulong ownPetId;
+        private long lastOwnCompanionScan;
+
+        private unsafe void ReadNameplate(IGameObject obj, out string title, out Vector4? textColour, out Vector4? edgeColour) {
+            title = string.Empty;
+            textColour = null;
+            edgeColour = null;
+
+            try {
+                var module = RaptureAtkModule.Instance();
+                var addon = Svc.GameGui.GetAddonByName<AddonNamePlate>("NamePlate");
+
+                if (module != null && addon != null) {
+                    int count = Math.Min(module->NameplateInfoCount, AddonNamePlate.NumNamePlateObjects);
+                    var entries = module->NamePlateInfoEntries;
+
+                    for (int i = 0; i < count; i++) {
+                        if (entries[i].ObjectId.Id != obj.GameObjectId) {
+                            continue;
+                        }
+
+                        title = entries[i].Title.ToString().Trim();
+
+                        var plate = addon->NamePlateObjectArray + i;
+                        if (plate->NameText != null) {
+                            var text = plate->NameText->TextColor;
+                            var edge = plate->NameText->EdgeColor;
+
+                            if (text.A != 0) {
+                                textColour = new Vector4(text.R / 255f, text.G / 255f, text.B / 255f, 1f);
+                            }
+
+                            if (edge.A != 0) {
+                                edgeColour = new Vector4(edge.R / 255f, edge.G / 255f, edge.B / 255f, 1f);
+                            }
+                        }
+
+                        break;
+                    }
+                }
+            } catch { }
+
+            if (title.Length == 0 && obj.ObjectKind == ObjectKind.EventNpc) {
+                try {
+                    if (Svc.Data.GetExcelSheet<ENpcResident>().TryGetRow(obj.BaseId, out var resident)) {
+                        title = resident.Title.ExtractText().Trim();
+                    }
+                } catch { }
+            }
+        }
+        
+        private unsafe void RefreshOwnCompanions(bool force = false) {
+            long now = Environment.TickCount64;
+            if (!force && now - lastOwnCompanionScan < OwnCompanionScanIntervalMs) {
+                return;
+            }
+
+            lastOwnCompanionScan = now;
+            ownMinionId = 0;
+            ownPetId = 0;
+
+            var player = ObjectTable.LocalPlayer;
+            if (player == null) {
+                return;
+            }
+
+            foreach (var obj in ObjectTable) {
+                if (obj.ObjectKind == ObjectKind.Companion) {
+                    var companion = (Companion*) obj.Address;
+                    if ((nint) companion->Owner == player.Address || (obj.OwnerId != 0 && obj.OwnerId == player.EntityId)) {
+                        ownMinionId = obj.GameObjectId;
+                    }
+                } else if (obj.ObjectKind == ObjectKind.BattleNpc && obj.SubKind == 2 && obj.OwnerId == player.EntityId) {
+                    ownPetId = obj.GameObjectId;
+                }
+            }
+        }
+
+        public bool HasOwnMinion() {
+            RefreshOwnCompanions();
+            return ownMinionId != 0;
+        }
+
+        public bool HasOwnPet() {
+            RefreshOwnCompanions();
+            return ownPetId != 0;
+        }
+
+        public void OpenOwnMinionStalkWindow() {
+            RefreshOwnCompanions(true);
+            var obj = ownMinionId != 0 ? ObjectTable.SearchById(ownMinionId) : null;
+            if (obj != null) {
+                OpenObjectStalkWindow(BuildObjectInfo(obj));
+            }
+        }
+
+        public void OpenOwnPetStalkWindow() {
+            RefreshOwnCompanions(true);
+            var obj = ownPetId != 0 ? ObjectTable.SearchById(ownPetId) : null;
+            if (obj != null) {
+                OpenObjectStalkWindow(BuildObjectInfo(obj));
+            }
+        }
+
+        public void OpenObjectStalkWindow(ObjectTargetInfo info) {
+            string key = GetObjectKey(info);
+
+            if (objectStalks.TryGetValue(key, out var existing)) {
+                if (existing.Window != null) {
+                    existing.Window.IsOpen = true;
+                }
+
+                return;
+            }
+
+            var stalk = new ObjectStalk {
+                Info = new ObjectTargetInfo {
+                    Name = info.Name,
+                    OriginalName = info.OriginalName,
+                    OwnerName = info.OwnerName,
+                    KindLabel = info.KindLabel,
+                    GameObjectId = info.GameObjectId,
+                    Title = info.Title,
+                    TextColour = info.TextColour,
+                    EdgeColour = info.EdgeColour
+                },
+                IsLoaded = true
+            };
+
+            var window = new StalkerWindow(this, key, stalk.Info.Name);
+            stalk.Window = window;
+            objectStalks[key] = stalk;
+            WindowSystem.AddWindow(window);
+        }
+
+        public void CloseObjectStalkWindow(string key) {
+            if (objectStalks.Remove(key, out var stalk) && stalk.Window != null) {
+                WindowSystem.RemoveWindow(stalk.Window);
+            }
+        }
+
+        public ObjectStalk? GetObjectStalk(string key) {
+            return objectStalks.TryGetValue(key, out var stalk) ? stalk : null;
+        }
+
+        public List<ViewerInfo> GetObjectStalkViewers(string key) {
+            if (!objectStalks.TryGetValue(key, out var stalk)) {
+                return new List<ViewerInfo>();
+            }
+
+            var ordered = stalk.Viewers.Values.OrderByDescending(v => v.IsActive).ThenByDescending(v => v.LastSeen);
+
+            if (!Configuration.KeepHistory) {
+                return ordered.Where(v => v.IsActive).ToList();
+            }
+
+            var active = ordered.Where(v => v.IsActive);
+            var previous = ordered.Where(v => !v.IsActive).Take(Math.Max(0, Configuration.NumHistory));
+
+            return active.Concat(previous).ToList();
+        }
+
+        private ObjectTargetInfo BuildObjectInfo(IGameObject obj) {
+            string kindLabel = DescribeTarget(obj);
+            string originalName = CleanName(obj.Name.TextValue);
+            string name = originalName;
+
+            ReadNameplate(obj, out string title, out Vector4? textColour, out Vector4? edgeColour);
+
+            if (nameplateCache.TryGetValue(obj.GameObjectId, out var cached)) {
+                if (title.Length == 0) {
+                    title = cached.Title;
+                }
+
+                textColour ??= cached.Text;
+                edgeColour ??= cached.Edge;
+            }
+
+            if (title.Length > 0 || textColour.HasValue || edgeColour.HasValue) {
+                if (nameplateCache.Count > 512) {
+                    nameplateCache.Clear();
+                }
+
+                nameplateCache[obj.GameObjectId] = (title, textColour, edgeColour);
+            }
+
+            if (kindLabel is "Pet" or "Minion") {
+                title = string.Empty;
+            }
+
+            if (TryGetPetNickname(obj, out var nickname, out var nickText, out var nickEdge)) {
+                name = nickname;
+                textColour = nickText ?? textColour;
+                edgeColour = nickEdge ?? edgeColour;
+            }
+
+            if (string.IsNullOrWhiteSpace(name)) {
+                name = $"Unnamed {kindLabel}";
+            }
+
+            return new ObjectTargetInfo {
+                Name = name,
+                OriginalName = originalName,
+                OwnerName = GetOwner(obj),
+                KindLabel = kindLabel,
+                GameObjectId = obj.GameObjectId,
+                Title = title,
+                TextColour = textColour,
+                EdgeColour = edgeColour
+            };
+        }
+
+        private IGameObject? FindObjectByIdentity(ObjectTargetInfo info) {
+            foreach (var obj in ObjectTable) {
+                if (obj is IPlayerCharacter) {
+                    continue;
+                }
+
+                if (CleanName(obj.Name.TextValue) != info.OriginalName || GetOwner(obj) != info.OwnerName) {
+                    continue;
+                }
+
+                return obj;
+            }
+
+            return null;
+        }
+
+        private void UpdateObjectStalks(long currentTick) {
+            if (objectStalks.Count == 0) {
+                return;
+            }
+
+            var idToKey = new Dictionary<ulong, string>();
+            var lookingAt = new Dictionary<string, HashSet<string>>();
+
+            foreach (var entry in objectStalks) {
+                var stalk = entry.Value;
+                IGameObject? obj = ObjectTable.SearchById(stalk.Info.GameObjectId);
+
+                if (obj == null || obj is IPlayerCharacter || CleanName(obj.Name.TextValue) != stalk.Info.OriginalName) {
+                    obj = null;
+
+                    if (currentTick - stalk.LastRebind >= LoadingIntervalMs) {
+                        stalk.LastRebind = currentTick;
+                        obj = FindObjectByIdentity(stalk.Info);
+                    }
+                }
+
+                if (obj == null) {
+                    stalk.IsLoaded = false;
+                    stalk.TargetPlayer = null;
+                    stalk.TargetObject = null;
+
+                    foreach (var viewer in stalk.Viewers.Values) {
+                        viewer.IsActive = false;
+                    }
+
+                    continue;
+                }
+
+                stalk.IsLoaded = true;
+                stalk.Info.GameObjectId = obj.GameObjectId;
+                idToKey[obj.GameObjectId] = entry.Key;
+                lookingAt[entry.Key] = new HashSet<string>();
+
+                UpdateObjectOwnTarget(stalk, obj);
+            }
+
+            if (idToKey.Count == 0) {
+                return;
+            }
+
+            foreach (var obj in ObjectTable) {
+                if (obj is not IPlayerCharacter character || !idToKey.TryGetValue(character.TargetObjectId, out var key)) {
+                    continue;
+                }
+
+                string charKey = GetPlayerKey(character);
+                lookingAt[key].Add(charKey);
+
+                var viewers = objectStalks[key].Viewers;
+                if (!viewers.TryGetValue(charKey, out var viewer)) {
+                    viewers[charKey] = CreateViewer(character);
+                } else {
+                    viewer.IsActive = true;
+                    viewer.LastSeen = DateTime.Now;
+                }
+            }
+
+            foreach (var entry in lookingAt) {
+                foreach (var viewer in objectStalks[entry.Key].Viewers) {
+                    if (!entry.Value.Contains(viewer.Key)) {
+                        viewer.Value.IsActive = false;
+                    }
+                }
+            }
+        }
+
+        private void UpdateObjectOwnTarget(ObjectStalk stalk, IGameObject obj) {
+            ulong targetId = GetLookTargetId(obj);
+            var target = targetId == 0 || targetId == 0xE0000000 ? null : ObjectTable.SearchById(targetId);
+
+            if (target == null) {
+                stalk.TargetPlayer = null;
+                stalk.TargetObject = null;
+            } else if (target is IPlayerCharacter player) {
+                stalk.TargetObject = null;
+
+                if (stalk.TargetPlayer == null || GetViewerKey(stalk.TargetPlayer) != GetPlayerKey(player)) {
+                    stalk.TargetPlayer = CreateViewer(player);
+                }
+            } else {
+                stalk.TargetPlayer = null;
+                stalk.TargetObject = BuildObjectInfo(target);
+            }
+        }
+
+        public ObjectTargetInfo? GetStalkerObjectTarget(ViewerInfo stalker) {
+            return stalkerObjectTarget.TryGetValue(GetViewerKey(stalker), out var target) ? target : null;
+        }
+
+        public void TargetObject(ObjectTargetInfo info) {
+            var obj = ObjectTable.SearchById(info.GameObjectId);
+            if (obj != null) {
+                TargetManager.Target = obj;
+            } else {
+                ChatGui.PrintError($"[Peeping Cat] Cannot Target - {info.Name}.");
+            }
+        }
+        
+        public void OpenObjectContextMenu(ObjectTargetInfo info) {
+            var obj = ObjectTable.SearchById(info.GameObjectId);
+            if (obj == null) {
+                ChatGui.PrintError($"[Peeping Cat] Cannot Open Context Menu - {info.Name}.");
+                return;
+            }
+
+            unsafe {
+                Svc.Framework.RunOnTick(() => {
+                    AgentHUD.Instance()->OpenContextMenuFromTarget(obj.Struct());
+                });
+            }
+        }
+
+        private unsafe string GetOwner(IGameObject obj) {
+            try {
+                if (obj.ObjectKind.ToString() == "Companion") {
+                    var companion = (Companion*) obj.Address;
+                    nint ownerAddress = (nint) companion->Owner;
+
+                    if (ownerAddress != 0) {
+                        foreach (var other in ObjectTable) {
+                            if (other is IPlayerCharacter player && player.Address == ownerAddress) {
+                                return player.Name.TextValue;
+                            }
+                        }
+                    }
+                }
+
+                if (obj.OwnerId != 0 && obj.OwnerId != 0xE0000000) {
+                    if (ObjectTable.SearchByEntityId(obj.OwnerId) is IPlayerCharacter ownerCharacter) {
+                        return ownerCharacter.Name.TextValue;
+                    }
+                }
+            } catch { }
+
+            return string.Empty;
+        }
+        
+        private unsafe ulong GetLookTargetId(IGameObject obj) {
+            if (obj is not ICharacter) {
+                return obj.TargetObjectId;
+            }
+
+            var chara = (Character*)obj.Address;
+            var controller = &chara->LookAt.Controller;
+            int count = Math.Min(controller->ParamCount, 6);
+
+            foreach (int i in new[] { 1, 2, 0 }) {
+                if (i >= count) {
+                    continue;
+                }
+
+                var param = controller->Params[i].TargetParam;
+                if (param.Type == CharacterLookAtTargetParam.TargetInfoType.GameObjectId
+                    && param.TargetId.Id != 0 && param.TargetId.Id != 0xE0000000) {
+                    return param.TargetId.Id;
+                }
+            }
+
+            return obj.TargetObjectId;
+        }
+        
+        public static bool IsShownTargetKind(string kindLabel) {
+            return kindLabel is "Player" or "Pet" or "Minion";
+        }
+
+        private static string DescribeTarget(IGameObject obj) {
+            string kind = obj.ObjectKind.ToString();
+
+            if (kind == "BattleNpc") {
+                return obj.SubKind switch {
+                    1 => "Spot",
+                    2 => "Pet",
+                    3 => "Chocobo",
+                    5 => "Enemy",
+                    6 => "Race",
+                    7 => "Verminion",
+                    9 => "Trust",
+                    _ => "Battle"
+                };
+            }
+
+            return kind switch {
+                "Pc" => "Player",
+                "EventNpc" => "NPC",
+                "Treasure" => "Box",
+                "Aetheryte" => "Aether",
+                "GatheringPoint" => "Node",
+                "EventObj" => "Object",
+                "Mount" => "Mount",
+                "Companion" => "Minion",
+                "Retainer" => "Retainer",
+                "AreaObject" => "Area",
+                "HousingEventObject" => "Housing",
+                "Cutscene" => "Cutscene",
+                "ReactionEventObject" => "Reaction",
+                "Ornament" => "Accessory",
+                "CardStand" => "Card",
+                "FollowMount" => "Mount",
+                _ => kind
+            };
         }
 
         public ViewerInfo CreateViewer(IPlayerCharacter character) {

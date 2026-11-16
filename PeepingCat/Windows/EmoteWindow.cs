@@ -36,16 +36,6 @@ namespace PeepingCat.Windows {
 
             window.Show(viewer);
         }
-
-        public static void Dispose() {
-            if (hooked) {
-                Svc.PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
-                hooked = false;
-            }
-
-            windowSystem.RemoveAllWindows();
-            window = null;
-        }
     }
 
     public class EmoteWindow : Window {

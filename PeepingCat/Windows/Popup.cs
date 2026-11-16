@@ -106,7 +106,7 @@ namespace PeepingCat.Windows {
         public static void Draw(Plugin Plugin, Plugin.ViewerInfo viewer) {
             if (ImGui.BeginPopup($"ContextMenu_{viewer.Name}")) {
                 bool showTell = Plugin.Configuration.TellOption;
-                bool showEmote = Plugin.Configuration.DoteOption && viewer.isLoaded;
+                bool showEmote = Plugin.Configuration.EmoteOption && viewer.isLoaded;
                 bool showStalk = Plugin.Configuration.StalkOption && viewer.isLoaded;
                 bool showContext = Plugin.Configuration.SearchInfoOption && viewer.isLoaded;
                 bool showSearchInfo = Plugin.Configuration.ViewSearchInfoOption && !string.IsNullOrWhiteSpace(viewer.Name);

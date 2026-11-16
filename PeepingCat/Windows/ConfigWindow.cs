@@ -1,13 +1,14 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 
-using PeepingCat.Helpers;
-
 using System;
 using System.Numerics;
+
+using PeepingCat.Helpers;
 
 namespace PeepingCat.Windows {
     public class ConfigWindow : Window {
@@ -15,6 +16,8 @@ namespace PeepingCat.Windows {
         private static readonly Vector4 Blue = new(0.6f, 0.8f, 1.0f, 1.0f);
         private static readonly Vector4 Green = new(0.7f, 1.0f, 0.7f, 1.0f);
         private static readonly Vector4 Pink = new(1.0f, 0.8f, 0.8f, 1.0f);
+
+        private const ImGuiColorEditFlags ColourFlags = ImGuiColorEditFlags.DisplayHex | ImGuiColorEditFlags.NoInputs;
 
         private Plugin plugin;
         private Configuration Configuration;
@@ -73,6 +76,11 @@ namespace PeepingCat.Windows {
                     DrawSoundTab();
                     EndScrollTab();
                 }
+                
+                if (BeginScrollTab("IPC")) { 
+                    DrawIpcTab();
+                    EndScrollTab();
+                }
 
                 if (BeginScrollTab("Colours")) {
                     DrawColoursTab();
@@ -113,258 +121,244 @@ namespace PeepingCat.Windows {
             ImGui.Spacing();
         }
 
+        private static void DrawSubTitle(string text, Vector4 colour) {
+            ImGui.Spacing();
+            ImGui.TextColored(colour, text);
+            ImGui.Spacing();
+        }
+
+        private static void Tooltip(string text) {
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) {
+                ImGui.SetTooltip(text);
+            }
+        }
+
+        private static bool ColourRow(string label, ref Vector4 colour, string? tooltip = null, ImGuiColorEditFlags flags = ColourFlags) {
+            bool changed = ImGui.ColorEdit4(label, ref colour, flags);
+            if (tooltip != null) {
+                Tooltip(tooltip);
+            }
+            return changed;
+        }
+
+        private static void DrawHint(string text) {
+            ImGui.PushTextWrapPos(0f);
+            ImGui.TextDisabled(text);
+            ImGui.PopTextWrapPos();
+        }
+
+        private void Toggle(string label, bool value, Action<bool> set, string? tooltip = null) {
+            if (ImGui.Checkbox(label, ref value)) {
+                set(value);
+                Configuration.Save();
+            }
+
+            if (tooltip != null) {
+                Tooltip(tooltip);
+            }
+        }
+
+        private static float IconButtonWidth(FontAwesomeIcon icon) {
+            ImGui.PushFont(UiBuilder.IconFont);
+            try {
+                return ImGuiHelpers.GetButtonSize(icon.ToIconString()).X;
+            } finally {
+                ImGui.PopFont();
+            }
+        }
+
         private void DrawPopUpTab() {
             DrawTitle("Pop-Up Settings", Gold);
+            DrawHint("Choose which actions appear in the right-click menu for a player.");
 
-            var tellOption = Configuration.TellOption;
-            if (ImGui.Checkbox("Send Tell", ref tellOption)) {
-                Configuration.TellOption = tellOption;
-                Configuration.Save();
-            }
-
-            var doteOption = Configuration.DoteOption;
-            if (ImGui.Checkbox("Use Emote", ref doteOption)) {
-                Configuration.DoteOption = doteOption;
-                Configuration.Save();
-            }
-
-            var buffOption = Configuration.BuffInfoOption;
-            if (ImGui.Checkbox("View Buffs", ref buffOption)) {
-                Configuration.BuffInfoOption = buffOption;
-                Configuration.Save();
-            }
-
-            var stalkOption = Configuration.StalkOption;
-            if (ImGui.Checkbox("Stalk", ref stalkOption)) {
-                Configuration.StalkOption = stalkOption;
+            DrawSubTitle("Actions", Blue);
+            ImGui.Indent();
+            Toggle("Send Tell", Configuration.TellOption, v => Configuration.TellOption = v);
+            Toggle("Use Emote", Configuration.EmoteOption, v => Configuration.EmoteOption = v);
+            Toggle("Stalk", Configuration.StalkOption, v => Configuration.StalkOption = v, "Opens a window showing who a player is targeting and who is or has been targeting them.");
+            
+            var stalkOwnMinionPet = Configuration.StalkOwnMinionPet;
+            if (ImGui.Checkbox("Stalk Own Minion/Pet Buttons", ref stalkOwnMinionPet)) {
+                Configuration.StalkOwnMinionPet = stalkOwnMinionPet;
                 Configuration.Save();
             }
             if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Opens a window showing who a player is targeting and who is or has been targeting them.");
+                ImGui.SetTooltip("Adds buttons to the Main Window to Stalk your own Minion and Summons, while you have them out.");
             }
+            
+            Toggle("View Buffs", Configuration.BuffInfoOption, v => Configuration.BuffInfoOption = v);
+            ImGui.Unindent();
 
             ImGui.Spacing();
             ImGui.Spacing();
 
-            var searchInfoOption = Configuration.SearchInfoOption;
-            if (ImGui.Checkbox("Open Context Menu", ref searchInfoOption)) {
-                Configuration.SearchInfoOption = searchInfoOption;
-                Configuration.Save();
-            }
+            DrawSubTitle("Player Info", Blue);
+            ImGui.Indent();
+            Toggle("Open Context Menu", Configuration.SearchInfoOption, v => Configuration.SearchInfoOption = v);
+            Toggle("View Search Info", Configuration.ViewSearchInfoOption, v => Configuration.ViewSearchInfoOption = v, "Looks the player up through the game's player search and opens their Search Info window. Only works for players who are online and searchable.");
+            Toggle("View Adventurer Plate", Configuration.AdventurePlateOption, v => Configuration.AdventurePlateOption = v);
+            Toggle("Examine", Configuration.ExamineOption, v => Configuration.ExamineOption = v);
+            ImGui.Unindent();
+        }
 
-            var viewSearchInfoOption = Configuration.ViewSearchInfoOption;
-            if (ImGui.Checkbox("View Search Info", ref viewSearchInfoOption)) {
-                Configuration.ViewSearchInfoOption = viewSearchInfoOption;
-                Configuration.Save();
-            }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Looks the player up through the game's player search and opens their Search Info window. Only works for players who are online and searchable.");
-            }
-
-            var apOption = Configuration.AdventurePlateOption;
-            if (ImGui.Checkbox("View Adventurer Plate", ref apOption)) {
-                Configuration.AdventurePlateOption = apOption;
-                Configuration.Save();
-            }
-
-            var exOption = Configuration.ExamineOption;
-            if (ImGui.Checkbox("Examine", ref exOption)) {
-                Configuration.ExamineOption = exOption;
-                Configuration.Save();
-            }
-
-            ImGui.Spacing();
+        private void DrawIpcTab() {
+            DrawTitle("IPC Integrations", Gold);
+            DrawHint("These options won't do anything unless the matching plugins are installed and enabled.");
             ImGui.Spacing();
 
             var chat2Menu = Configuration.Chat2MenuOption;
-            if (ImGui.Checkbox("Chat 2 Context Menu Integration", ref chat2Menu)) {
+            if (ImGui.Checkbox("Chat 2 Integration", ref chat2Menu)) {
                 Configuration.Chat2MenuOption = chat2Menu;
                 Configuration.Save();
                 plugin.SetChat2Integration(chat2Menu);
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Adds Peeping Cat's actions to Chat 2's right-click menu. Does nothing if Chat 2 isn't installed.");
-            }
+            Tooltip("Adds Peeping Cat's actions to Chat 2's right-click menu.");
 
             var useXim = Configuration.UseXIVMessenger;
-            if (ImGui.Checkbox("Use XIV Instant Messenger for Send Tell", ref useXim)) {
+            if (ImGui.Checkbox("XIV Instant Messenger Integration", ref useXim)) {
                 Configuration.UseXIVMessenger = useXim;
                 Configuration.Save();
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Opens the XIV Instant Messenger chat with that player instead of the quick message window.");
+            Tooltip("Send Tell opens the XIV Instant Messenger chat with that player instead of the quick message window.");
+            if (!plugin.HasXIVMessagerIpc()) {
+                ImGui.SameLine();
+                ImGui.TextDisabled("(not detected)");
             }
 
-            if (!plugin.HasXIVMessagerIpc()) {
-                ImGui.TextDisabled("XIV Instant Messenger not detected.");
+            var usePetNicknames = Configuration.UsePetNicknames;
+            if (ImGui.Checkbox("Pet Nicknames Integration", ref usePetNicknames)) {
+                Configuration.UsePetNicknames = usePetNicknames;
+                Configuration.Save();
             }
+            Tooltip("When a stalked player targets a minion or summon, shows the nickname set in Pet Nicknames instead of its default name.");
+            if (!plugin.HasPetNicknames()) {
+                ImGui.SameLine();
+                ImGui.TextDisabled("(not detected)");
+            }
+
         }
 
         private void DrawWindowTab() {
             DrawTitle("Window Settings", Gold);
 
-            var openOnLogin = Configuration.OpenOnLogin;
-            if (ImGui.Checkbox("Open on Login", ref openOnLogin)) {
-                Configuration.OpenOnLogin = openOnLogin;
-                Configuration.Save();
-            }
+            DrawSubTitle("Behaviour", Blue);
+            ImGui.Indent();
+            Toggle("Open on Login", Configuration.OpenOnLogin, v => Configuration.OpenOnLogin = v);
+            Toggle("Allow closing the Main Window with the Escape Key", Configuration.AllowClosingWithEscape, v => Configuration.AllowClosingWithEscape = v);
+            ImGui.Unindent();
 
-            var showSettingsButton = Configuration.ShowSettingsButton;
-            if (ImGui.Checkbox("Show Settings Button", ref showSettingsButton)) {
-                Configuration.ShowSettingsButton = showSettingsButton;
-                Configuration.Save();
-            }
+            ImGui.Spacing();
+            ImGui.Spacing();
 
-            var allowMoving = Configuration.AllowMovingMainWindow;
-            if (ImGui.Checkbox("Allow Moving the Main Window", ref allowMoving)) {
-                Configuration.AllowMovingMainWindow = allowMoving;
-                Configuration.Save();
-            }
+            DrawSubTitle("Main Window", Blue);
+            ImGui.Indent();
+            Toggle("Show Settings Button", Configuration.ShowSettingsButton, v => Configuration.ShowSettingsButton = v);
+            Toggle("Allow Moving the Main Window", Configuration.AllowMovingMainWindow, v => Configuration.AllowMovingMainWindow = v);
+            Toggle("Allow Resizing the Main Window", Configuration.AllowResizingMainWindow, v => Configuration.AllowResizingMainWindow = v);
+            Toggle("Show \"No viewers yet.\" Text", Configuration.ShowNoViewersText, v => Configuration.ShowNoViewersText = v, "Shows a placeholder text in the Main Window and Stalker windows when nobody is viewing.");
+            ImGui.Unindent();
 
-            var allowResizing = Configuration.AllowResizingMainWindow;
-            if (ImGui.Checkbox("Allow Resizing the Main Window", ref allowResizing)) {
-                Configuration.AllowResizingMainWindow = allowResizing;
-                Configuration.Save();
-            }
+            ImGui.Spacing();
+            ImGui.Spacing();
 
-            var allowEscape = Configuration.AllowClosingWithEscape;
-            if (ImGui.Checkbox("Allow closing the Main Window with the Escape Key", ref allowEscape)) {
-                Configuration.AllowClosingWithEscape = allowEscape;
-                Configuration.Save();
-            }
-
-            var showNoViewers = Configuration.ShowNoViewersText;
-            if (ImGui.Checkbox("Show \"No viewers yet.\" Text", ref showNoViewers)) {
-                Configuration.ShowNoViewersText = showNoViewers;
-                Configuration.Save();
-            }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Shows a placeholder text in the Main Window and Stalker windows when nobody is viewing.");
-            }
-
-            DrawTitle("Visibility", Gold);
-
-            var showInCombat = Configuration.ShowInCombat;
-            if (ImGui.Checkbox("Show Window while in Combat", ref showInCombat)) {
-                Configuration.ShowInCombat = showInCombat;
-                Configuration.Save();
-            }
-
-            var showInInstance = !Configuration.HideWindowWhileInDuty;
-            if (ImGui.Checkbox("Show Window while in Instance", ref showInInstance)) {
-                Configuration.HideWindowWhileInDuty = !showInInstance;
-                Configuration.Save();
-            }
-
-            var showInCutscenes = Configuration.ShowInCutscenes;
-            if (ImGui.Checkbox("Show Window while in Cutscenes", ref showInCutscenes)) {
-                Configuration.ShowInCutscenes = showInCutscenes;
-                Configuration.Save();
-            }
+            DrawSubTitle("Visibility", Blue);
+            ImGui.Indent();
+            Toggle("Show Window while in Combat", Configuration.ShowInCombat, v => Configuration.ShowInCombat = v);
+            Toggle("Show Window while in Instance", !Configuration.HideWindowWhileInDuty, v => Configuration.HideWindowWhileInDuty = !v);
+            Toggle("Show Window while in Cutscenes", Configuration.ShowInCutscenes, v => Configuration.ShowInCutscenes = v);
+            ImGui.Unindent();
         }
 
         private void DrawMarkersTab() {
             DrawTitle("Marker Settings", Gold);
 
+            DrawSubTitle("Your Target", Blue);
             var markTargeted = Configuration.MarkTargeted;
-            if (ImGui.Checkbox("Mark your target", ref markTargeted)) {
-                Configuration.MarkTargeted = markTargeted;
-                Configuration.Save();
-            }
-
             var targetedColour = Configuration.MarkTargetedColour;
-            if (ImGui.ColorEdit4("Target mark colour", ref targetedColour)) {
-                Configuration.MarkTargetedColour = targetedColour;
-                Configuration.Save();
-            }
-
             var targetedSize = Configuration.MarkTargetedSize;
-            if (ImGui.DragFloat("Target mark size", ref targetedSize, 0.01f, 0f, 15f)) {
+            if (DrawMarkerBlock("targeted", "Mark your target", "Draws a marker on the player you are currently targeting.", ref markTargeted, ref targetedColour, ref targetedSize)) {
+                Configuration.MarkTargeted = markTargeted;
+                Configuration.MarkTargetedColour = targetedColour;
                 Configuration.MarkTargetedSize = Math.Max(0f, targetedSize);
                 Configuration.Save();
             }
 
             ImGui.Spacing();
+            ImGui.Spacing();
 
+            DrawSubTitle("Targeting You", Blue);
             var markTargeting = Configuration.MarkTargeting;
-            if (ImGui.Checkbox("Mark targeting you", ref markTargeting)) {
-                Configuration.MarkTargeting = markTargeting;
-                Configuration.Save();
-            }
-
             var targetingColour = Configuration.MarkTargetingColour;
-            if (ImGui.ColorEdit4("Targeting mark colour", ref targetingColour)) {
-                Configuration.MarkTargetingColour = targetingColour;
-                Configuration.Save();
-            }
-
             var targetingSize = Configuration.MarkTargetingSize;
-            if (ImGui.DragFloat("Targeting mark size", ref targetingSize, 0.01f, 0f, 15f)) {
+            if (DrawMarkerBlock("targeting", "Mark players targeting you", "Draws a marker on players who are currently targeting you.", ref markTargeting, ref targetingColour, ref targetingSize)) {
+                Configuration.MarkTargeting = markTargeting;
+                Configuration.MarkTargetingColour = targetingColour;
                 Configuration.MarkTargetingSize = Math.Max(0f, targetingSize);
                 Configuration.Save();
             }
         }
 
+        private static bool DrawMarkerBlock(string id, string label, string tooltip, ref bool enabled, ref Vector4 colour, ref float size) {
+            bool changed = false;
+            ImGui.PushID(id);
+            changed |= ImGui.Checkbox(label, ref enabled);
+            Tooltip(tooltip);
+
+            ImGui.Indent();
+            ImGui.BeginDisabled(!enabled);
+
+            changed |= ColourRow("Colour", ref colour, null, ImGuiColorEditFlags.None);
+            changed |= ImGui.SliderFloat("Size", ref size, 0f, 15f, "%.2f");
+
+            ImGui.EndDisabled();
+            ImGui.Unindent();
+
+            ImGui.PopID();
+            return changed;
+        }
+
         private void DrawFiltersTab() {
             DrawTitle("Filter Settings", Gold);
+            DrawHint("Choose who gets logged when they target you.");
 
-            var logParty = Configuration.LogParty;
-            if (ImGui.Checkbox("Log party members", ref logParty)) {
-                Configuration.LogParty = logParty;
-                Configuration.Save();
-            }
-
-            var logAlliance = Configuration.LogAlliance;
-            if (ImGui.Checkbox("Log alliance members", ref logAlliance)) {
-                Configuration.LogAlliance = logAlliance;
-                Configuration.Save();
-            }
-
-            var logInCombat = Configuration.LogInCombat;
-            if (ImGui.Checkbox("Log targeters while in combat", ref logInCombat)) {
-                Configuration.LogInCombat = logInCombat;
-                Configuration.Save();
-            }
-
-            var logSelf = Configuration.DetectSelfTarget;
-            if (ImGui.Checkbox("Log yourself", ref logSelf)) {
-                Configuration.DetectSelfTarget = logSelf;
-                Configuration.Save();
-            }
+            DrawSubTitle("Who to Log", Blue);
+            ImGui.Indent();
+            Toggle("Log party members", Configuration.LogParty, v => Configuration.LogParty = v);
+            Toggle("Log alliance members", Configuration.LogAlliance, v => Configuration.LogAlliance = v);
+            Toggle("Log targeters while in combat", Configuration.LogInCombat, v => Configuration.LogInCombat = v);
+            Toggle("Log yourself", Configuration.DetectSelfTarget, v => Configuration.DetectSelfTarget = v);
+            ImGui.Unindent();
         }
 
         private void DrawHistoryTab() {
             DrawTitle("History Settings", Gold);
 
-            var keepHistory = Configuration.KeepHistory;
-            if (ImGui.Checkbox("Show previous targeters", ref keepHistory)) {
-                Configuration.KeepHistory = keepHistory;
-                Configuration.Save();
-            }
+            DrawSubTitle("Previous Targeters", Blue);
+            ImGui.Indent();
+            Toggle("Show previous targeters", Configuration.KeepHistory, v => Configuration.KeepHistory = v);
 
-            var historyWhenClosed = Configuration.HistoryWhenClosed;
-            if (ImGui.Checkbox("Record history when window is closed", ref historyWhenClosed)) {
-                Configuration.HistoryWhenClosed = historyWhenClosed;
-                Configuration.Save();
-            }
+            ImGui.BeginDisabled(!Configuration.KeepHistory);
+            Toggle("Record history when window is closed", Configuration.HistoryWhenClosed, v => Configuration.HistoryWhenClosed = v);
 
-            var numHistory = Configuration.NumHistory;
-            if (ImGui.InputInt("Number of previous targeters to keep", ref numHistory)) {
-                Configuration.NumHistory = Math.Max(0, Math.Min(50, numHistory));
+            var numHistory = Math.Clamp(Configuration.NumHistory, 1, 50);
+            if (ImGui.SliderInt("Previous targeters to keep", ref numHistory, 1, 50)) {
+                Configuration.NumHistory = Math.Clamp(numHistory, 1, 50);
                 Configuration.Save();
             }
+            ImGui.EndDisabled();
+            ImGui.Unindent();
 
-            var showTimestamps = Configuration.ShowTimestamps;
-            if (ImGui.Checkbox("Show timestamps", ref showTimestamps)) {
-                Configuration.ShowTimestamps = showTimestamps;
-                Configuration.Save();
-            }
+            ImGui.Spacing();
+            ImGui.Spacing();
 
-            var use24Hour = Configuration.Use24HourTime;
-            if (ImGui.Checkbox("Use 24-hour time", ref use24Hour)) {
-                Configuration.Use24HourTime = use24Hour;
-                Configuration.Save();
-            }
+            DrawSubTitle("Timestamps", Blue);
+            ImGui.Indent();
+            Toggle("Show timestamps", Configuration.ShowTimestamps, v => Configuration.ShowTimestamps = v);
+
+            ImGui.BeginDisabled(!Configuration.ShowTimestamps);
+            Toggle("Use 24-hour time", Configuration.Use24HourTime, v => Configuration.Use24HourTime = v);
+            ImGui.EndDisabled();
+            ImGui.Unindent();
         }
 
         private void DrawSoundTab() {
@@ -375,78 +369,70 @@ namespace PeepingCat.Windows {
                 Configuration.SoundEnabled = soundEnabled;
                 Configuration.Save();
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Enable or disable the plugin’s sound playback.");
-            }
+            Tooltip("Enable or disable the plugin's sound playback.");
 
             if (!Configuration.SoundEnabled) {
+                ImGui.Spacing();
+                ImGui.TextDisabled("Turn sound on to configure alerts.");
                 return;
             }
 
-            ImGui.Indent();
-            ImGui.Spacing();
+            var spacing = ImGui.GetStyle().ItemSpacing.X;
+            var playWidth = IconButtonWidth(FontAwesomeIcon.Play);
+            var browseWidth = IconButtonWidth(FontAwesomeIcon.FolderOpen);
+            var resetWidth = IconButtonWidth(FontAwesomeIcon.Undo);
+            var edge = ImGui.GetStyle().ScrollbarSize;
 
-            float volume = Configuration.SoundVolume;
-            if (ImGui.SliderFloat("Volume", ref volume, 0.0f, 1.0f, "Volume: %.2f")) {
-                Configuration.SoundVolume = volume;
+            DrawSubTitle("Volume", Blue);
+            ImGui.Indent();
+
+            var volumePercent = Configuration.SoundVolume * 100f;
+            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - playWidth - spacing - edge);
+            if (ImGui.SliderFloat("##volume", ref volumePercent, 0f, 100f, "%.0f%%")) {
+                Configuration.SoundVolume = Math.Clamp(volumePercent / 100f, 0f, 1f);
                 Configuration.Save();
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Adjust the volume for sound effects.");
-            }
+            Tooltip("Adjust the volume for sound effects.");
 
-            if (ImGui.Button("Test Sound")) {
+            ImGui.SameLine();
+            if (ImGuiComponents.IconButton("sound_test", FontAwesomeIcon.Play)) {
                 SoundManager.PlaySound(true);
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Click to play a test sound with the current settings.");
-            }
+            Tooltip("Play a test sound with the current settings.");
 
-            ImGui.Spacing();
+            ImGui.Unindent();
+
+            DrawSubTitle("Alerts", Blue);
+            ImGui.Indent();
+
             var soundwithoutwindow = Configuration.SoundEnabledWindowClosed;
             if (ImGui.Checkbox("Play Sound when Window is Closed", ref soundwithoutwindow)) {
                 Configuration.SoundEnabledWindowClosed = soundwithoutwindow;
                 Configuration.Save();
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("If enabled, sound will still play even if the Main Window is not visible.");
-            }
+            Tooltip("If enabled, sound will still play even if the Main Window is not visible.");
+            Toggle("Mute Alerts while in Duties", Configuration.SuppressSoundWhileInDuty, v => Configuration.SuppressSoundWhileInDuty = v, "Disables alert sounds whenever you are bound by a duty (e.g., dungeons, trials, raids).");
+            Toggle("Mute Alerts while in PvP", Configuration.SuppressSoundWhileInPvP, v => Configuration.SuppressSoundWhileInPvP = v, "Disables alert sounds while you are in PvP.");
 
-            var suppressInDuty = Configuration.SuppressSoundWhileInDuty;
-            if (ImGui.Checkbox("Mute Alerts while in Duties", ref suppressInDuty)) {
-                Configuration.SuppressSoundWhileInDuty = suppressInDuty;
-                Configuration.Save();
-            }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Disables alert sounds whenever you are bound by a duty (e.g., dungeons, trials, PvP).");
-            }
-
+            ImGui.Spacing();
             var soundCooldown = Configuration.SoundCooldownSeconds;
             ImGui.SetNextItemWidth(120);
             if (ImGui.InputInt("Sound Delay (seconds)", ref soundCooldown)) {
                 Configuration.SoundCooldownSeconds = Math.Clamp(soundCooldown, 0, 3600);
                 Configuration.Save();
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Minimum time before the same viewer can trigger another sound alert.");
-            }
+            Tooltip("Minimum time before the same viewer can trigger another sound alert.");
 
-            ImGui.Spacing();
-            ImGui.TextUnformatted("Path to Audio File:");
-            Vector2 buttonSize;
-            ImGui.PushFont(UiBuilder.IconFont);
-            try {
-                buttonSize = ImGuiHelpers.GetButtonSize(FontAwesomeIcon.Folder.ToIconString());
-            } finally {
-                ImGui.PopFont();
-            }
+            ImGui.Unindent();
+
+            DrawSubTitle("Audio File", Blue);
+            ImGui.Indent();
 
             var path = Configuration.SoundFilePath ?? "";
-            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - buttonSize.X - 10);
-            if (ImGui.InputText("###sound-path", ref path, 1_000)) {
+            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - browseWidth - resetWidth - spacing * 2 - edge);
+            if (ImGui.InputText("##sound-path", ref path, 1_000)) {
                 path = path.Trim();
-                bool isPath = path.Length == 0;
-                if (!isPath) {
+                if (path.Length > 0) {
                     string newpath = SoundManager.CopySoundFileToPluginDirectory(path);
                     if (newpath != "") {
                         Configuration.SoundFilePath = newpath;
@@ -456,51 +442,41 @@ namespace PeepingCat.Windows {
                 }
                 Configuration.Save();
             }
-
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Specify the path to your preferred audio file.");
-            }
+            Tooltip("Specify the path to your preferred audio file.");
 
             ImGui.SameLine();
-
-            ImGui.PushFont(UiBuilder.IconFont);
-            try {
-                if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString())) {
-                    FileDialogManager.OpenFileDialog(
-                        "Path to Audio File",
-                        ".wav,.mp3,.aif,.aiff,.wma,.aac",
-                        (selected, selectedPath) => {
-                            if (!selected) return;
-                            var chosen = selectedPath.Trim();
-                            bool isPath = chosen.Length == 0;
-
-                            if (!isPath) {
-                                string newpath = SoundManager.CopySoundFileToPluginDirectory(chosen);
-                                if (newpath != "") Configuration.SoundFilePath = newpath;
-                            } else {
-                                Configuration.SoundFilePath = Configuration.OriginalSoundFile;
-                            }
-                            Configuration.Save();
+            if (ImGuiComponents.IconButton("sound_browse", FontAwesomeIcon.FolderOpen)) {
+                FileDialogManager.OpenFileDialog("Path to Audio File", ".wav,.mp3,.aif,.aiff,.wma,.aac", (selected, selectedPath) => {
+                        if (!selected) {
+                            return;
                         }
-                    );
-                }
-            } finally {
-                ImGui.PopFont();
+                        
+                        var chosen = selectedPath.Trim();
+                        if (chosen.Length > 0) {
+                            string newpath = SoundManager.CopySoundFileToPluginDirectory(chosen);
+                            if (newpath != "") Configuration.SoundFilePath = newpath;
+                        } else {
+                            Configuration.SoundFilePath = Configuration.OriginalSoundFile;
+                        }
+                        
+                        Configuration.Save(); 
+                    }
+                );
             }
+            Tooltip("Browse for an audio file.");
 
-            if (ImGui.Button("Reset to Default Soundfile")) {
+            ImGui.SameLine();
+            if (ImGuiComponents.IconButton("sound_reset", FontAwesomeIcon.Undo)) {
                 Configuration.SoundFilePath = Configuration.OriginalSoundFile;
                 Configuration.Save();
             }
-            if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip("Restores the default sound file that shipped with the plugin.");
-            }
+            Tooltip("Restore the default sound file that shipped with the plugin.");
 
             ImGui.Unindent();
         }
 
         private void DrawColoursTab() {
-            var colorPickerFlags = ImGuiColorEditFlags.DisplayHex | ImGuiColorEditFlags.NoInputs;
+            var colorPickerFlags = ImGuiColorEditFlags.None;
 
             DrawTitle("Colour Settings", Green);
 
@@ -538,6 +514,7 @@ namespace PeepingCat.Windows {
             ImGui.Unindent();
             
             DrawTitle("Nearby Players", Green);
+            ImGui.Indent();
 
             var colourMoodles = Configuration.ColourMoodlesNearby;
             if (ImGui.Checkbox("Colour players with Moodles", ref colourMoodles)) {
@@ -557,17 +534,30 @@ namespace PeepingCat.Windows {
             if (!plugin.HasMoodlesIpc()) {
                 ImGui.TextDisabled("Moodles not detected.");
             }
+
+            ImGui.Unindent();
+        }
+
+        private static void AboutRow(string label, string value) {
+            ImGui.TextDisabled(label);
+            ImGui.SameLine(110);
+            ImGui.TextUnformatted(value);
         }
 
         private void DrawAboutTab() {
             DrawTitle("About Peeping Cat", Pink);
 
-            ImGui.Text("Peeping Cat");
+            ImGui.Indent();
+            AboutRow("Version", Configuration.DevVersion);
+            AboutRow("Original", "thakyZ (Peeping Tom)");
+            AboutRow("Fork", "kcuY (Peeping Tim)");
+            AboutRow("Edited by", "BoxuChan (Peeping Cat)");
+            ImGui.Unindent();
+
             ImGui.Spacing();
-            ImGui.Text($"Version: {Configuration.DevVersion}");
-            ImGui.Text("Author: Originally thakyZ (Peeping Tom) & kcuY (Peeping Tim), Edited by BoxuChan");
             ImGui.Spacing();
-            ImGui.TextWrapped("Description: A slightly different version of Peeping Tom, offering additional functions.");
+
+            DrawHint("A slightly different version of Peeping Tom, offering additional functions.");
         }
     }
 }

@@ -13,6 +13,7 @@ public class Configuration : IPluginConfiguration {
     public bool SoundEnabled { get; set; }
     public bool SoundEnabledWindowClosed { get; set; }
     public bool SuppressSoundWhileInDuty { get; set; } = true;
+    public bool SuppressSoundWhileInPvP { get; set; } = true;
     public bool HideWindowWhileInDuty { get; set; }
     public float SoundVolume { get; set; } = 0.5f;
     public int SoundCooldownSeconds { get; set; } = 5;
@@ -26,10 +27,11 @@ public class Configuration : IPluginConfiguration {
     public bool ShowInCombat { get; set; }
     public bool ShowInCutscenes { get; set; }
     public bool TellOption { get; set; } = true;
-    public bool DoteOption { get; set; } = true;
+    public bool EmoteOption { get; set; } = true;
     public bool AdventurePlateOption { get; set; } = true;
     public bool ExamineOption { get; set; } = true;
     public bool StalkOption { get; set; }
+    public bool StalkOwnMinionPet { get; set; }
     public bool SearchInfoOption { get; set; } = true;
     public bool ViewSearchInfoOption { get; set; } = true;
     public bool BuffInfoOption { get; set; } = true;
@@ -56,8 +58,9 @@ public class Configuration : IPluginConfiguration {
     public Vector4 MarkTargetingColour { get; set; } = new Vector4(1f, 0f, 0f, 1f);
     public float MarkTargetingSize { get; set; } = 4f;
     public bool UseXIVMessenger { get; set; }
+    public bool UsePetNicknames { get; set; }
 
-    public readonly string DevVersion = "2.5.0.0";
+    public readonly string DevVersion = "2.6.0.0";
     
     public static string BasePath = Plugin.PluginInterface.GetPluginConfigDirectory();
 
